@@ -13,6 +13,7 @@ from __future__ import print_function
 __sets = {}
 from datasets.pascal_voc import pascal_voc
 from datasets.coco import coco
+from datasets.coco_mask import coco_mask
 from datasets.imagenet import imagenet
 from datasets.vg import vg
 
@@ -29,6 +30,18 @@ for year in ['2014']:
   for split in ['train', 'val', 'minival', 'valminusminival', 'trainval']:
     name = 'coco_{}_{}'.format(year, split)
     __sets[name] = (lambda split=split, year=year: coco(split, year))
+
+# coco 2014 mask
+for year in ['2014']:  # val 2014 seems to have bug: many decoded segmentation masks have different size comparing to the image.
+  for split in ['train', 'val', 'minival', 'valminusminival', 'trainval']:
+    name = 'coco-mask_{}_{}'.format(year, split)
+    __sets[name] = (lambda split=split, year=year: coco_mask(split, year))
+
+# coco 2017 mask
+for year in ['2017']:
+  for split in ['train', 'val']:
+    name = 'coco-mask_{}_{}'.format(year, split)
+    __sets[name] = (lambda split=split, year=year: coco_mask(split, year))
 
 # Set up coco_2014_cap_<split>
 for year in ['2014']:
@@ -51,7 +64,7 @@ for version in ['150-50-20', '150-50-50', '500-150-80', '750-250-150', '1750-700
     for split in ['minitrain', 'smalltrain', 'train', 'minival', 'smallval', 'val', 'test']:
         name = 'vg_{}_{}'.format(version,split)
         __sets[name] = (lambda split=split, version=version: vg(version, split))
-        
+
 # set up image net.
 for split in ['train', 'val', 'val1', 'val2', 'test']:
     name = 'imagenet_{}'.format(split)
