@@ -5,6 +5,7 @@ CUDA_PATH=/usr/local/cuda/
 python setup.py build_ext --inplace
 rm -rf build
 
+# Choose cuda arch as you need
 # CUDA_ARCH="-gencode arch=compute_30,code=sm_30 \
 #            -gencode arch=compute_35,code=sm_35 \
 #            -gencode arch=compute_50,code=sm_50 \
