@@ -102,6 +102,6 @@ class _RPN(nn.Module):
             rpn_bbox_targets = Variable(rpn_bbox_targets)
 
             rpn_loss_box = _smooth_l1_loss(rpn_bbox_pred, rpn_bbox_targets, rpn_bbox_inside_weights,
-                                                rpn_bbox_outside_weights, sigma=3, dim=[1,2,3])
+                                           rpn_bbox_outside_weights, sigma=3, dim=[1,2,3])
 
-        return rois, self.rpn_loss_cls, self.rpn_loss_box
+        return rois, rpn_loss_cls, rpn_loss_box
