@@ -41,9 +41,6 @@ class _RPN(nn.Module):
         # define anchor target layer
         self.RPN_anchor_target = _AnchorTargetLayer(self.feat_stride, self.anchor_scales, self.anchor_ratios)
 
-        self.rpn_loss_cls = 0
-        self.rpn_loss_box = 0
-
     @staticmethod
     def reshape(x, d):
         input_shape = x.size()
@@ -64,7 +61,7 @@ class _RPN(nn.Module):
         # get rpn classification score
         rpn_cls_score = self.RPN_cls_score(rpn_conv1)
 
-        rpn_cls_score_reshape = self.reshape(rpn_cls_score, 2)
+        rpn_cls_score_reshape = self.reshape(rpn_cls_score, 2)  # 2(bg/fg)
         rpn_cls_prob_reshape = F.softmax(rpn_cls_score_reshape)
         rpn_cls_prob = self.reshape(rpn_cls_prob_reshape, self.nc_score_out)
 
@@ -77,8 +74,8 @@ class _RPN(nn.Module):
         rois = self.RPN_proposal((rpn_cls_prob.data, rpn_bbox_pred.data,
                                  im_info, cfg_key))
 
-        self.rpn_loss_cls = 0
-        self.rpn_loss_box = 0
+        rpn_loss_cls = 0
+        rpn_loss_box = 0
 
         # generating training labels and build the rpn loss
         if self.training:
@@ -94,7 +91,7 @@ class _RPN(nn.Module):
             rpn_cls_score = torch.index_select(rpn_cls_score.view(-1,2), 0, rpn_keep)
             rpn_label = torch.index_select(rpn_label.view(-1), 0, rpn_keep.data)
             rpn_label = Variable(rpn_label.long())
-            self.rpn_loss_cls = F.cross_entropy(rpn_cls_score, rpn_label)
+            rpn_loss_cls = F.cross_entropy(rpn_cls_score, rpn_label)
             fg_cnt = torch.sum(rpn_label.data.ne(0))
 
             rpn_bbox_targets, rpn_bbox_inside_weights, rpn_bbox_outside_weights = rpn_data[1:]
@@ -104,7 +101,7 @@ class _RPN(nn.Module):
             rpn_bbox_outside_weights = Variable(rpn_bbox_outside_weights)
             rpn_bbox_targets = Variable(rpn_bbox_targets)
 
-            self.rpn_loss_box = _smooth_l1_loss(rpn_bbox_pred, rpn_bbox_targets, rpn_bbox_inside_weights,
-                                                            rpn_bbox_outside_weights, sigma=3, dim=[1,2,3])
+            rpn_loss_box = _smooth_l1_loss(rpn_bbox_pred, rpn_bbox_targets, rpn_bbox_inside_weights,
+                                                rpn_bbox_outside_weights, sigma=3, dim=[1,2,3])
 
         return rois, self.rpn_loss_cls, self.rpn_loss_box
