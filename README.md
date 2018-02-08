@@ -1,4 +1,10 @@
-# A *Faster* Pytorch Implementation of Faster R-CNN
+# A Pytorch Implementation of Mask R-CNN
+This repository is built on [jwyang/faster-rcnn.pytorch](https://github.com/jwyang/faster-rcnn.pytorch). Million thanks to Jianwei Yang and Jiasen Lu's awesome work.
+
+**Still under construction!!**
+- bbox + mask training is working, but not sure about the accuracy.
+
+Below is the original readme from [jwyang/faster-rcnn.pytorch](https://github.com/jwyang/faster-rcnn.pytorch)
 
 ## Introduction
 
