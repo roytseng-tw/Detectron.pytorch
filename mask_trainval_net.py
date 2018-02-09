@@ -144,6 +144,31 @@ class sampler(Sampler):
   def __len__(self):
     return self.num_data
 
+
+def save(args, epoch, step, model, optimizer):
+  if args.mGPUs:
+      save_name = os.path.join(output_dir, 'mask_rcnn_{}_{}_{}.pth'.format(args.session, epoch, step))
+      save_checkpoint({
+        'session': args.session,
+        'epoch': epoch + 1,
+        'model': model.module.state_dict(),
+        'optimizer': optimizer.state_dict(),
+        'pooling_mode': cfg.POOLING_MODE,
+        'class_agnostic': args.class_agnostic,
+      }, save_name)
+  else:
+    save_name = os.path.join(output_dir, 'mask_rcnn_{}_{}_{}.pth'.format(args.session, epoch, step))
+    save_checkpoint({
+      'session': args.session,
+      'epoch': epoch + 1,
+      'model': model.state_dict(),
+      'optimizer': optimizer.state_dict(),
+      'pooling_mode': cfg.POOLING_MODE,
+      'class_agnostic': args.class_agnostic,
+    }, save_name)
+  print('save model: {}'.format(save_name))
+
+
 if __name__ == '__main__':
 
   import warnings
@@ -236,7 +261,7 @@ if __name__ == '__main__':
     im_info = im_info.cuda()
     num_boxes = num_boxes.cuda()
     gt_boxes = gt_boxes.cuda()
-    gt_masks = gt_masks.cuda()
+    # gt_masks = gt_masks.cuda(), move rois_mask to cuda later is enough
 
   # make variable
   im_data = Variable(im_data)
@@ -343,6 +368,9 @@ if __name__ == '__main__':
         clip_gradient(fasterRCNN, 10.)
       optimizer.step()
 
+      if step % 6000 == 0:
+        save(args, epoch, step, fasterRCNN, optimizer)
+
       if step % args.disp_interval == 0:
         end = time.time()
         if step > 0:
@@ -385,27 +413,7 @@ if __name__ == '__main__':
         loss_temp = 0
         start = time.time()
 
-    if args.mGPUs:
-      save_name = os.path.join(output_dir, 'mask_rcnn_{}_{}_{}.pth'.format(args.session, epoch, step))
-      save_checkpoint({
-        'session': args.session,
-        'epoch': epoch + 1,
-        'model': fasterRCNN.module.state_dict(),
-        'optimizer': optimizer.state_dict(),
-        'pooling_mode': cfg.POOLING_MODE,
-        'class_agnostic': args.class_agnostic,
-      }, save_name)
-    else:
-      save_name = os.path.join(output_dir, 'mask_rcnn_{}_{}_{}.pth'.format(args.session, epoch, step))
-      save_checkpoint({
-        'session': args.session,
-        'epoch': epoch + 1,
-        'model': fasterRCNN.state_dict(),
-        'optimizer': optimizer.state_dict(),
-        'pooling_mode': cfg.POOLING_MODE,
-        'class_agnostic': args.class_agnostic,
-      }, save_name)
-    print('save model: {}'.format(save_name))
-
+    # save at the end of each epoch
+    save(args, epoch, step, fasterRCNN, optimizer)
     end = time.time()
     print(end - start)

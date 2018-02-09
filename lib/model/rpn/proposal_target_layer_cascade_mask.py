@@ -47,13 +47,13 @@ class _ProposalTargetLayer(nn.Module):
         fg_rois_per_image = int(np.round(cfg.TRAIN.FG_FRACTION * rois_per_image))
         fg_rois_per_image = 1 if fg_rois_per_image == 0 else fg_rois_per_image
 
-        labels, rois, bbox_targets, bbox_inside_weights, masks = self._sample_rois_pytorch(
+        labels, rois, bbox_targets, bbox_inside_weights, masks, masks_weights = self._sample_rois_pytorch(
             all_rois, gt_boxes, fg_rois_per_image,
             rois_per_image, self._num_classes, gt_masks)
 
         bbox_outside_weights = (bbox_inside_weights > 0).float()
 
-        return rois, labels, bbox_targets, bbox_inside_weights, bbox_outside_weights, masks
+        return rois, labels, bbox_targets, bbox_inside_weights, bbox_outside_weights, masks, masks_weights
 
     def backward(self, top, propagate_down, bottom):
         """This layer does not propagate gradients."""
@@ -134,8 +134,11 @@ class _ProposalTargetLayer(nn.Module):
         labels_batch = labels.new(batch_size, rois_per_image).zero_()
         rois_batch = all_rois.new(batch_size, rois_per_image, 5).zero_()
         gt_rois_batch = all_rois.new(batch_size, rois_per_image, 5).zero_()
-        gt_masks_batch = gt_masks.new(batch_size, rois_per_image, cfg.TRAIN.MASK_SHAPE[0], cfg.TRAIN.MASK_SHAPE[1]).zero_()
         gt_masks = gt_masks.cpu()  # convert to cpu, because of resizing later
+        # move to gpu later
+        gt_masks_batch = gt_masks.new(batch_size, rois_per_image, cfg.TRAIN.MASK_SHAPE[0], cfg.TRAIN.MASK_SHAPE[1]).zero_()
+        masks_weights = gt_masks.new(batch_size, rois_per_image).zero_()
+
         # Guard against the case when an image has fewer than max_fg_rois_per_image
         # foreground RoIs
         for i in range(batch_size):
@@ -205,22 +208,31 @@ class _ProposalTargetLayer(nn.Module):
             gt_rois_batch[i] = gt_boxes[i][gt_assignment[i][keep_inds]]
 
             # cropped to bbox boundaries and resized to neural network output size
-            # use bbox_inside_weights to select foreground masks
+            # use gt_masks_weights to select valid masks: foreground and rounded box area > 0
             if fg_num_rois > 0:
                 assign_inds = gt_assignment[i][fg_inds].cpu()
                 masks = gt_masks[i][assign_inds]
-                bboxes = all_rois[i][fg_inds].cpu().type(torch.IntTensor)
+                masks_weights[i, :fg_num_rois] = 1
+                # bboxes = all_rois[i][fg_inds].cpu().type(torch.IntTensor)
+                bboxes = all_rois[i][fg_inds].cpu().round().type(torch.IntTensor)
                 cnt = 0
                 for mask, bbox in zip(masks, bboxes):
                     _, x1, y1, x2, y2 = bbox
-                    mask_re = sktf.resize(mask[y1:y2, x1:x2], cfg.TRAIN.MASK_SHAPE, order=0).astype(np.float32)
-                    # print(mask_re.dtype, set(mask_re.reshape(-1).tolist()))
-                    gt_masks_batch[i][cnt].copy_(torch.from_numpy(mask_re))
+                    if x1 == x2 or y1 == y2:  # box area == 0, mask cannot be resize
+                        masks_weights[i, cnt] = 0
+                    else:
+                        mask_re = sktf.resize(mask[y1:y2, x1:x2].numpy(), cfg.TRAIN.MASK_SHAPE, order=0).astype(np.float32)
+                        # print(mask_re.dtype, set(mask_re.reshape(-1).tolist()))
+                        gt_masks_batch[i][cnt].copy_(torch.from_numpy(mask_re))
+
+        # move to corresponding gpu
+        gt_masks_batch = gt_masks_batch.cuda(labels_batch.get_device())
+        masks_weights = masks_weights.cuda(labels_batch.get_device())
 
         bbox_target_data = self._compute_targets_pytorch(
-                rois_batch[:,:,1:5], gt_rois_batch[:,:,:4])
+            rois_batch[:,:,1:5], gt_rois_batch[:,:,:4])
 
         bbox_targets, bbox_inside_weights = \
-                self._get_bbox_regression_labels_pytorch(bbox_target_data, labels_batch, num_classes)
+            self._get_bbox_regression_labels_pytorch(bbox_target_data, labels_batch, num_classes)
 
-        return labels_batch, rois_batch, bbox_targets, bbox_inside_weights, gt_masks_batch
+        return labels_batch, rois_batch, bbox_targets, bbox_inside_weights, gt_masks_batch, masks_weights

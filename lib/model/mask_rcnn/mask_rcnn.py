@@ -43,23 +43,26 @@ class _maskRCNN(nn.Module):
         # feed base feature map tp RPN to obtain rois
         rois, rpn_loss_cls, rpn_loss_bbox = self.RCNN_rpn(base_feat, im_info, gt_boxes, num_boxes)
 
-        # rois: (n, x1, y1, x2, y2) specifying an image batch index n and a rectangle (x1, y1, x2, y2)
+        # rois: (n, x1, y1, x2, y2) specifying an image batch index n and a rectangle (x1, y1, x2, y2). rectangles will in the image.
 
         # if it is training phrase, then use ground trubut bboxes for refining
         if self.training:
             roi_data = self.RCNN_proposal_target(rois, gt_boxes, num_boxes, gt_masks)
-            rois, rois_label, rois_target, rois_inside_ws, rois_outside_ws, rois_mask = roi_data
+            rois, rois_label, rois_target, rois_inside_ws, rois_outside_ws, rois_mask, rois_mask_ws = roi_data
 
             rois_label = Variable(rois_label.view(-1).long())
             rois_target = Variable(rois_target.view(-1, rois_target.size(2)))
             rois_inside_ws = Variable(rois_inside_ws.view(-1, rois_inside_ws.size(2)))
             rois_outside_ws = Variable(rois_outside_ws.view(-1, rois_outside_ws.size(2)))
             rois_mask = Variable(rois_mask.view(-1, rois_mask.size(2), rois_mask.size(3)))
+            rois_mask_ws = Variable(rois_mask_ws)
         else:
             rois_label = None
             rois_target = None
             rois_inside_ws = None
             rois_outside_ws = None
+            rois_mask = None
+            rois_mask_ws = None
             rpn_loss_cls = 0
             rpn_loss_bbox = 0
 
@@ -108,7 +111,7 @@ class _maskRCNN(nn.Module):
 
             # bounding box regression L1 loss
             RCNN_loss_bbox = _smooth_l1_loss(bbox_pred, rois_target, rois_inside_ws, rois_outside_ws)
-            loss_mask = mask_losses(mask_pred, rois_mask, rois_label, rois_inside_ws[:, 0])
+            loss_mask = mask_losses(mask_pred, rois_mask, rois_label, rois_mask_ws)
 
         cls_prob = cls_prob.view(batch_size, rois.size(1), -1)
         bbox_pred = bbox_pred.view(batch_size, rois.size(1), -1)
