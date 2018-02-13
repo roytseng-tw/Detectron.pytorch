@@ -14,10 +14,10 @@ __sets = {}
 from datasets.pascal_voc import pascal_voc
 from datasets.coco import coco
 from datasets.coco_mask import coco_mask
+from datasets.coco_mask_pose import coco_mask_pose
 from datasets.imagenet import imagenet
 from datasets.vg import vg
 
-import numpy as np
 
 # Set up voc_<year>_<split>
 for year in ['2007', '2012']:
@@ -43,6 +43,12 @@ for year in ['2017']:
     name = 'coco-mask_{}_{}'.format(year, split)
     __sets[name] = (lambda split=split, year=year: coco_mask(split, year))
 
+# coco 2017 mask pose
+for year in ['2017']:
+  for split in ['train', 'val']:
+    name = 'coco-mask-pose_{}_{}'.format(year, split)
+    __sets[name] = (lambda split=split, year=year: coco_mask_pose(split, year))
+
 # Set up coco_2014_cap_<split>
 for year in ['2014']:
   for split in ['train', 'val', 'capval', 'valminuscapval', 'trainval']:
@@ -62,7 +68,7 @@ for year in ['2015']:
 #         __sets[name] = (lambda split=split, version=version: vg(version, split))
 for version in ['150-50-20', '150-50-50', '500-150-80', '750-250-150', '1750-700-450', '1600-400-20']:
     for split in ['minitrain', 'smalltrain', 'train', 'minival', 'smallval', 'val', 'test']:
-        name = 'vg_{}_{}'.format(version,split)
+        name = 'vg_{}_{}'.format(version, split)
         __sets[name] = (lambda split=split, version=version: vg(version, split))
 
 # set up image net.
