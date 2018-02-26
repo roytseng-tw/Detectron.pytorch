@@ -208,7 +208,7 @@ class _ProposalTargetLayer(nn.Module):
             gt_rois_batch[i] = gt_boxes[i][gt_assignment[i][keep_inds]]
 
             # cropped to bbox boundaries and resized to neural network output size
-            # use gt_masks_weights to select valid masks: foreground and rounded box area > 0
+            # use masks_weights to select valid masks: foreground and rounded box area > 0
             if fg_num_rois > 0:
                 assign_inds = gt_assignment[i][fg_inds].cpu()
                 masks = gt_masks[i][assign_inds]
@@ -224,6 +224,7 @@ class _ProposalTargetLayer(nn.Module):
                         mask_re = sktf.resize(mask[y1:y2, x1:x2].numpy(), cfg.TRAIN.MASK_SHAPE, order=0).astype(np.float32)
                         # print(mask_re.dtype, set(mask_re.reshape(-1).tolist()))
                         gt_masks_batch[i][cnt].copy_(torch.from_numpy(mask_re))
+                    cnt += 1
 
         # move to corresponding gpu
         gt_masks_batch = gt_masks_batch.cuda(labels_batch.get_device())

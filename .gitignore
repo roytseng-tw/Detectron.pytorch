@@ -6,6 +6,13 @@ lib/pycocotools*/*.so
 lib/model/*/src/*.o
 lib/model/*/_ext/*/*.so
 
+.ipynb_checkpoints
+notebooks/*.pkl
+
+/output
+
+# ------------------------------
+
 .vscode/*
 !.vscode/settings.json
 !.vscode/tasks.json
