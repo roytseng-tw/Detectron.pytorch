@@ -198,10 +198,10 @@ class roibatchLoader(data.Dataset):
         gt_boxes_padding = torch.FloatTensor(self.max_num_box, gt_boxes.size(1)).zero_()
         gt_masks_padding = torch.FloatTensor(self.max_num_box, padding_masks.size()[1], padding_masks.size()[2]).zero_()
         if keep.numel() != 0:
-            gt_boxes = gt_boxes[keep]
-            num_boxes = min(gt_boxes.size(0), self.max_num_box)
-            gt_boxes_padding[:num_boxes, :] = gt_boxes[:num_boxes]
-            gt_masks_padding[:num_boxes, :, :] = padding_masks[:num_boxes]
+            num_boxes = min(keep.numel(), self.max_num_box)
+            keep = keep[:num_boxes]
+            gt_boxes_padding[:num_boxes, :] = gt_boxes[keep]
+            gt_masks_padding[:num_boxes, :, :] = padding_masks[keep]
         else:
             num_boxes = 0
 
