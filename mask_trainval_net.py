@@ -9,7 +9,6 @@ from __future__ import print_function
 
 import _init_paths
 import os
-import sys
 import numpy as np
 import argparse
 import pprint
@@ -45,10 +44,10 @@ def parse_args():
                       default='vgg16', type=str)
   parser.add_argument('--start_epoch', dest='start_epoch',
                       help='starting epoch',
-                      default=1, type=int)
-  parser.add_argument('--epochs', dest='max_epochs',
+                      default=0, type=int)
+  parser.add_argument('--epochs', dest='num_epochs',
                       help='number of epochs to train',
-                      default=20, type=int)
+                      default=10, type=int)
   parser.add_argument('--disp_interval', dest='disp_interval',
                       help='number of iterations to display',
                       default=100, type=int)
@@ -57,7 +56,7 @@ def parse_args():
                       default=10000, type=int)
 
   parser.add_argument('--save_dir', dest='save_dir',
-                      help='directory to save models', default="/home/roytseng/models",
+                      help='directory to save models', default=os.path.join(os.environ['HOME'], "models"),
                       nargs=argparse.REMAINDER)
   parser.add_argument('--nw', dest='num_workers',
                       help='number of worker to load data',
@@ -150,7 +149,7 @@ def save(args, epoch, step, model, optimizer):
       save_name = os.path.join(output_dir, 'mask_rcnn_{}_{}_{}.pth'.format(args.session, epoch, step))
       save_checkpoint({
         'session': args.session,
-        'epoch': epoch + 1,
+        'epoch': epoch,
         'model': model.module.state_dict(),
         'optimizer': optimizer.state_dict(),
         'pooling_mode': cfg.POOLING_MODE,
@@ -160,7 +159,7 @@ def save(args, epoch, step, model, optimizer):
     save_name = os.path.join(output_dir, 'mask_rcnn_{}_{}_{}.pth'.format(args.session, epoch, step))
     save_checkpoint({
       'session': args.session,
-      'epoch': epoch + 1,
+      'epoch': epoch,
       'model': model.state_dict(),
       'optimizer': optimizer.state_dict(),
       'pooling_mode': cfg.POOLING_MODE,
@@ -242,7 +241,7 @@ if __name__ == '__main__':
 
   sampler_batch = sampler(train_size, args.batch_size)
 
-  dataset = roibatchLoader(roidb, ratio_list, ratio_index, args.batch_size, \
+  dataset = roibatchLoader(roidb, ratio_list, ratio_index, args.batch_size,
                            imdb.num_classes, training=True)
 
   dataloader = torch.utils.data.DataLoader(dataset, batch_size=args.batch_size,
@@ -290,17 +289,17 @@ if __name__ == '__main__':
 
   lr = cfg.TRAIN.LEARNING_RATE
   lr = args.lr
-  #tr_momentum = cfg.TRAIN.MOMENTUM
-  #tr_momentum = args.momentum
+  # tr_momentum = cfg.TRAIN.MOMENTUM
+  # tr_momentum = args.momentum
 
   params = []
   for key, value in dict(fasterRCNN.named_parameters()).items():
     if value.requires_grad:
       if 'bias' in key:
-        params += [{'params':[value],'lr':lr*(cfg.TRAIN.DOUBLE_BIAS + 1), \
-                'weight_decay': cfg.TRAIN.BIAS_DECAY and cfg.TRAIN.WEIGHT_DECAY or 0}]
+        params += [{'params': [value], 'lr':lr*(cfg.TRAIN.DOUBLE_BIAS + 1),
+                   'weight_decay': cfg.TRAIN.BIAS_DECAY and cfg.TRAIN.WEIGHT_DECAY or 0}]
       else:
-        params += [{'params':[value],'lr':lr, 'weight_decay': cfg.TRAIN.WEIGHT_DECAY}]
+        params += [{'params': [value], 'lr':lr, 'weight_decay': cfg.TRAIN.WEIGHT_DECAY}]
 
   if args.optimizer == "adam":
     lr = lr * 0.1
@@ -311,11 +310,11 @@ if __name__ == '__main__':
 
   if args.resume:
     load_name = os.path.join(output_dir,
-      'faster_rcnn_{}_{}_{}.pth'.format(args.checksession, args.checkepoch, args.checkpoint))
+      'mask_rcnn_{}_{}_{}.pth'.format(args.checksession, args.checkepoch, args.checkpoint))
     print("loading checkpoint %s" % (load_name))
     checkpoint = torch.load(load_name)
     args.session = checkpoint['session']
-    args.start_epoch = checkpoint['epoch']
+    args.start_epoch = checkpoint['epoch'] + 1  # Assume to start from next epoch
     fasterRCNN.load_state_dict(checkpoint['model'])
     optimizer.load_state_dict(checkpoint['optimizer'])
     lr = optimizer.param_groups[0]['lr']
@@ -331,13 +330,13 @@ if __name__ == '__main__':
 
   iters_per_epoch = int(train_size / args.batch_size)
 
-  for epoch in range(args.start_epoch, args.max_epochs):
+  for epoch in range(args.start_epoch, args.start_epoch + args.num_epochs):
     # setting to train mode
     fasterRCNN.train()
     loss_temp = 0
     start = time.time()
 
-    if epoch % (args.lr_decay_step + 1) == 0:
+    if epoch % args.lr_decay_step == 0:
         adjust_learning_rate(optimizer, args.lr_decay_gamma)
         lr *= args.lr_decay_gamma
 
@@ -393,11 +392,11 @@ if __name__ == '__main__':
           fg_cnt = torch.sum(rois_label.data.ne(0))
           bg_cnt = rois_label.data.numel() - fg_cnt
 
-        print("[session %d][epoch %2d][iter %4d] loss: %.4f, lr: %.2e" \
-                                % (args.session, epoch, step, loss_temp, lr))
+        print("[session %d][epoch %2d][iter %4d] loss: %.4f, lr: %.2e"
+              % (args.session, epoch, step, loss_temp, lr))
         print("\t\t\tfg/bg=(%d/%d), time cost: %f" % (fg_cnt, bg_cnt, end-start))
-        print("\t\t\trpn_cls: %.4f, rpn_box: %.4f, rcnn_cls: %.4f, rcnn_box %.4f, mask %.4f" \
-                      % (loss_rpn_cls, loss_rpn_box, loss_rcnn_cls, loss_rcnn_box, loss_mask))
+        print("\t\t\trpn_cls: %.4f, rpn_box: %.4f, rcnn_cls: %.4f, rcnn_box %.4f, mask %.4f"
+              % (loss_rpn_cls, loss_rpn_box, loss_rcnn_cls, loss_rcnn_box, loss_mask))
         if args.use_tfboard:
           info = {
             'loss': loss_temp,
