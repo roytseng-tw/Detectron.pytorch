@@ -44,7 +44,7 @@ for year in ['2017']:
     __sets[name] = (lambda split=split, year=year: coco_mask(split, year))
 
 # coco 2017 mask pose
-for year in ['2017']:
+for year in ['2014', '2017']:
   for split in ['train', 'val']:
     name = 'coco-mask-pose_{}_{}'.format(year, split)
     __sets[name] = (lambda split=split, year=year: coco_mask_pose(split, year))

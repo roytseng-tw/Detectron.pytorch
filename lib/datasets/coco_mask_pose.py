@@ -167,7 +167,7 @@ class coco_mask_pose(imdb):
     overlaps = np.zeros((num_objs, self.num_classes), dtype=np.float32)
     seg_areas = np.zeros((num_objs), dtype=np.float32)
     segs = []  # put coco segmentation annotations
-    poses = np.zeros((num_objs, 17, 3), dtype=np.uint16)
+    poses = np.zeros((num_objs, self.num_keypoints, 3), dtype=np.uint16)
 
     # Lookup table to map from COCO category ids to our internal class
     # indices
