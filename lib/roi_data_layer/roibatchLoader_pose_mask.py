@@ -10,7 +10,7 @@ import torch.utils.data as data
 import torch
 
 from model.utils.config import cfg
-from roi_data_layer.minibatch_mask import get_minibatch
+from roi_data_layer.minibatch_pose_mask import get_minibatch
 
 import numpy as np
 
@@ -70,6 +70,7 @@ class roibatchLoader(data.Dataset):
         np.random.shuffle(shuffle_inds)
         gt_boxes = torch.from_numpy(blobs['gt_boxes'][shuffle_inds])
         gt_masks = torch.from_numpy(blobs['gt_masks'][:, shuffle_inds].astype(np.float32))  # [n, num_gt_rois, h, w], n = 1
+        gt_poses = torch.from_numpy(blobs['gt_poses'][shuffle_inds])  # [num_gt_rois, n_kps, 3]
 
         ########################################################
         # padding the input image to fixed size for each group #
@@ -114,10 +115,11 @@ class roibatchLoader(data.Dataset):
                 # shift y coordiante of gt_boxes
                 gt_boxes[:, 1] = gt_boxes[:, 1] - float(y_s)
                 gt_boxes[:, 3] = gt_boxes[:, 3] - float(y_s)
-
                 # update gt bounding box according the trip
                 gt_boxes[:, 1].clamp_(0, trim_size - 1)
                 gt_boxes[:, 3].clamp_(0, trim_size - 1)
+                # shift y coordiante of gt_poses
+                gt_poses[:, :, 1] = gt_poses[:, :, 1] - float(y_s)
 
             else:
                 # this means that data_width >> data_height, we need to crop the
@@ -152,6 +154,8 @@ class roibatchLoader(data.Dataset):
                 # update gt bounding box according the trip
                 gt_boxes[:, 0].clamp_(0, trim_size - 1)
                 gt_boxes[:, 2].clamp_(0, trim_size - 1)
+                # shift x coordiante of gt_poses
+                gt_poses[:, :, 0] = gt_poses[:, :, 0] - float(x_s)
 
         # based on the ratio, padding the image. zero-padding.
         if ratio < 1:
@@ -187,9 +191,18 @@ class roibatchLoader(data.Dataset):
             padding_data = data[0][:trim_size, :trim_size, :]
             padding_masks = torch.zeros(num_gt_rois, trim_size, trim_size)
             padding_masks = gt_masks[0, :, :trim_size, :trim_size]
-            gt_boxes.clamp_(0, trim_size)
+            gt_boxes[:, :4].clamp_(0, trim_size)
             im_info[0, 0] = trim_size
             im_info[0, 1] = trim_size
+
+        # update keypoint visible flags
+        gt_poses = gt_poses.view(-1, 3)
+        cond = gt_poses[:, :2] < 0  # x or y < 0
+        cond[:, 0] |= (gt_poses[:, 0] >= im_info[0, 1])  # x >= width
+        cond[:, 1] |= (gt_poses[:, 1] >= im_info[0, 0])  # y >= height
+        invisable = cond[:, 0] | cond[:, 1]
+        gt_poses[torch.nonzero(invisable), 2] = 0
+        gt_poses = gt_poses.view(num_gt_rois, -1, 3)
 
         # check the bounding box:
         not_keep = (gt_boxes[:,0] == gt_boxes[:,2]) | (gt_boxes[:,1] == gt_boxes[:,3]) # exclude zero-width or zero-height boxes
@@ -197,11 +210,13 @@ class roibatchLoader(data.Dataset):
 
         gt_boxes_padding = torch.FloatTensor(self.max_num_box, gt_boxes.size(1)).zero_()
         gt_masks_padding = torch.FloatTensor(self.max_num_box, padding_masks.size()[1], padding_masks.size()[2]).zero_()
+        gt_poses_padding = torch.FloatTensor(self.max_num_box, gt_poses.size()[1], gt_poses.size()[2]).zero_()
         if keep.numel() != 0:
-            gt_boxes = gt_boxes[keep]
-            num_boxes = min(gt_boxes.size(0), self.max_num_box)
-            gt_boxes_padding[:num_boxes, :] = gt_boxes[:num_boxes]
-            gt_masks_padding[:num_boxes, :, :] = padding_masks[:num_boxes]
+            num_boxes = min(keep.numel(), self.max_num_box)
+            keep = keep[:num_boxes]
+            gt_boxes_padding[:num_boxes, :] = gt_boxes[keep]
+            gt_masks_padding[:num_boxes, :, :] = padding_masks[keep]
+            gt_poses_padding[:num_boxes, :, :] = gt_poses[keep]
         else:
             num_boxes = 0
 
@@ -209,7 +224,7 @@ class roibatchLoader(data.Dataset):
         padding_data = padding_data.permute(2, 0, 1).contiguous()
         im_info = im_info.view(3)
 
-        return padding_data, im_info, gt_boxes_padding, num_boxes, gt_masks_padding
+        return padding_data, im_info, gt_boxes_padding, num_boxes, gt_masks_padding, gt_poses_padding
     else:  # inference TODO: not yet implement for mask-rcnn !!!
         data = data.permute(0, 3, 1, 2).contiguous().view(3, data_height, data_width)
         im_info = im_info.view(3)
