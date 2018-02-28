@@ -201,7 +201,10 @@ class roibatchLoader(data.Dataset):
         cond[:, 0] |= (gt_poses[:, 0] >= im_info[0, 1])  # x >= width
         cond[:, 1] |= (gt_poses[:, 1] >= im_info[0, 0])  # y >= height
         invisable = cond[:, 0] | cond[:, 1]
-        gt_poses[torch.nonzero(invisable), 2] = 0
+        invis_inds = torch.nonzero(invisable).view(-1)
+        if invis_inds.numel() != 0:
+            # it's fine to overwrite invisible keypoints' (x,y) by (0,0)
+            gt_poses[invis_inds] = gt_poses.new(1, 3).zero_().expand(invis_inds.numel(), -1)
         gt_poses = gt_poses.view(num_gt_rois, -1, 3)
 
         # check the bounding box:

@@ -48,7 +48,7 @@ def get_minibatch(roidb, num_classes):
   blobs['gt_masks'] = _get_seg_blob(roidb[0], im_scales[0], gt_inds)
   assert blobs['gt_masks'].shape[1] == len(gt_inds)
 
-  blobs['gt_poses'] = roidb[0]['poses'][gt_inds, :, :]
+  blobs['gt_poses'] = roidb[0]['poses'][gt_inds, :, :].astype(np.float32)
   blobs['gt_poses'][:, :, :2] *= im_scales[0]
 
   # gt boxes: (x1, y1, x2, y2, cls)
