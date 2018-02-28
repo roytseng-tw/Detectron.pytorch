@@ -14,6 +14,7 @@ import numpy as np
 import argparse
 import pprint
 import pdb
+import traceback
 import time
 from tqdm import tqdm
 
@@ -416,6 +417,8 @@ if __name__ == '__main__':
   except (RuntimeError, KeyboardInterrupt) as e:
     print('Save on exception:', e)
     save(args, epoch, step, maskRCNN, optimizer, iters_per_epoch)
+    tb = traceback.format_exc()
+    print(tb)
   finally:
     # Training ends
     logger.close()
