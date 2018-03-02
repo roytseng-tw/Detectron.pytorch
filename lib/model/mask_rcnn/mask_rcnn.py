@@ -24,7 +24,7 @@ class _maskRCNN(nn.Module):
         # define rpn
         self.RCNN_rpn = _RPN(self.dout_base_model)
         if cfg.HAS_POSE_BRANCH:
-            from model.rpn.proposal_target_layer_cascade_mask_pose import _ProposalTargetLayer
+            from model.rpn.proposal_target_layer_cascade_pose_mask import _ProposalTargetLayer
         else:
             from model.rpn.proposal_target_layer_cascade_mask import _ProposalTargetLayer
         self.RCNN_proposal_target = _ProposalTargetLayer(self.n_classes)
