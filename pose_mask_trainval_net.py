@@ -13,6 +13,7 @@ import numpy as np
 import argparse
 import pprint
 import pdb
+import traceback
 import time
 from tqdm import tqdm
 import cv2
@@ -114,6 +115,10 @@ def parse_args():
   parser.add_argument('--checkstep',
                       help='step to load model',
                       type=int)
+
+# load checkpoint
+  parser.add_argument('--load_ckpt', help='checkpoint path to load')
+
 # log and diaplay
   parser.add_argument('--use_tfboard', dest='use_tfboard',
                       help='whether use tensorflow tensorboard',
@@ -310,6 +315,14 @@ if __name__ == '__main__':
       cfg.POOLING_MODE = checkpoint['pooling_mode']
     print("loaded checkpoint %s" % (load_name))
 
+  if args.load_ckpt:
+    load_name = args.load_ckpt
+    print("loading checkpoint %s" % (load_name))
+    checkpoint = torch.load(load_name)
+    maskRCNN.load_state_dict(checkpoint['model'])
+    if 'pooling_mode' in checkpoint.keys():
+      cfg.POOLING_MODE = checkpoint['pooling_mode']
+
   if args.mGPUs:
     maskRCNN = nn.DataParallel(maskRCNN)
 
@@ -319,88 +332,95 @@ if __name__ == '__main__':
   iters_per_epoch = int(train_size / args.batch_size)  # drop last
   ckpt_interval_per_epoch = iters_per_epoch // args.ckpt_num_per_epoch
 
-  for epoch in range(args.start_epoch, args.start_epoch + args.num_epochs):
-    # setting to train mode
-    maskRCNN.train()
-    loss_temp = 0
-    start = time.time()
+  print('Start Training !')
+  try:
+    for epoch in range(args.start_epoch, args.start_epoch + args.num_epochs):
+      # setting to train mode
+      maskRCNN.train()
+      loss_temp = 0
+      start = time.time()
 
-    if epoch % args.lr_decay_step == 0:
-        adjust_learning_rate(optimizer, args.lr_decay_gamma)
-        lr *= args.lr_decay_gamma
+      data_iter = iter(dataloader)
+      for step in range(iters_per_epoch):
+        data = next(data_iter)
 
-    data_iter = iter(dataloader)
-    for step in range(iters_per_epoch):
-      data = next(data_iter)
+        im_data.data.resize_(data[0].size()).copy_(data[0])
+        im_info.data.resize_(data[1].size()).copy_(data[1])
+        gt_boxes.data.resize_(data[2].size()).copy_(data[2])
+        num_boxes.data.resize_(data[3].size()).copy_(data[3])
+        gt_masks.data.resize_(data[4].size()).copy_(data[4])
+        gt_poses.data.resize_(data[5].size()).copy_(data[5])
 
-      im_data.data.resize_(data[0].size()).copy_(data[0])
-      im_info.data.resize_(data[1].size()).copy_(data[1])
-      gt_boxes.data.resize_(data[2].size()).copy_(data[2])
-      num_boxes.data.resize_(data[3].size()).copy_(data[3])
-      gt_masks.data.resize_(data[4].size()).copy_(data[4])
-      gt_poses.data.resize_(data[5].size()).copy_(data[5])
+        rois, rois_label, cls_prob, bbox_pred, mask_pred, \
+          rpn_loss_cls, rpn_loss_box, \
+          RCNN_loss_cls, RCNN_loss_bbox, \
+          loss_mask, loss_pose \
+          = maskRCNN(im_data, im_info, gt_boxes, num_boxes, gt_masks, gt_poses)
 
-      rois, rois_label, cls_prob, bbox_pred, mask_pred, \
-        rpn_loss_cls, rpn_loss_box, \
-        RCNN_loss_cls, RCNN_loss_bbox, \
-        loss_mask, loss_pose \
-        = maskRCNN(im_data, im_info, gt_boxes, num_boxes, gt_masks, gt_poses)
+        loss = rpn_loss_cls.mean() + rpn_loss_box.mean() + RCNN_loss_cls.mean() + RCNN_loss_bbox.mean() \
+          + loss_mask.mean() + loss_pose.mean()
+        loss_temp += loss.data[0]
 
-      loss = rpn_loss_cls.mean() + rpn_loss_box.mean() + RCNN_loss_cls.mean() + RCNN_loss_bbox.mean() \
-        + loss_mask.mean() + loss_pose.mean()
-      loss_temp += loss.data[0]
+        # backward
+        optimizer.zero_grad()
+        loss.backward()
+        if args.net == "vgg16":
+          clip_gradient(maskRCNN, 10.)
+        optimizer.step()
 
-      # backward
-      optimizer.zero_grad()
-      loss.backward()
-      if args.net == "vgg16":
-        clip_gradient(maskRCNN, 10.)
-      optimizer.step()
+        if (step+1) % ckpt_interval_per_epoch == 0:
+          save(args, epoch, step, maskRCNN, optimizer, iters_per_epoch)
 
-      if step != 0 and step % ckpt_interval_per_epoch == 0:
-        save(args, epoch, step, maskRCNN, optimizer, iters_per_epoch)
+        if (step+1) % args.disp_interval == 0:
+          end = time.time()
+          if step > 0:
+            loss_temp /= args.disp_interval
 
-      if step % args.disp_interval == 0:
-        end = time.time()
-        if step > 0:
-          loss_temp /= args.disp_interval
+          # .mean() in case of mGPUs
+          loss_rpn_cls = rpn_loss_cls.mean().data[0]
+          loss_rpn_box = rpn_loss_box.mean().data[0]
+          loss_rcnn_cls = RCNN_loss_cls.mean().data[0]
+          loss_rcnn_box = RCNN_loss_bbox.mean().data[0]
+          loss_mask = loss_mask.mean().data[0]
+          loss_pose = loss_pose.mean().data[0]
+          fg_cnt = torch.sum(rois_label.data.ne(0))
+          bg_cnt = rois_label.data.numel() - fg_cnt
 
-        # .mean() in case of mGPUs
-        loss_rpn_cls = rpn_loss_cls.mean().data[0]
-        loss_rpn_box = rpn_loss_box.mean().data[0]
-        loss_rcnn_cls = RCNN_loss_cls.mean().data[0]
-        loss_rcnn_box = RCNN_loss_bbox.mean().data[0]
-        loss_mask = loss_mask.mean().data[0]
-        loss_pose = loss_pose.mean().data[0]
-        fg_cnt = torch.sum(rois_label.data.ne(0))
-        bg_cnt = rois_label.data.numel() - fg_cnt
+          print("[%s][session %d][epoch %2d][iter %4d / %4d]"
+                % (run_name, args.session, epoch, step, iters_per_epoch))
+          print("\t\tloss: %.4f, lr: %.2e" % (loss_temp, lr))
+          print("\t\tfg/bg=(%d/%d), time cost: %f" % (fg_cnt, bg_cnt, end-start))
+          print("\t\trpn_cls: %.4f, rpn_box: %.4f, rcnn_cls: %.4f, rcnn_box %.4f, mask %.4f, pose %.4f"
+                % (loss_rpn_cls, loss_rpn_box, loss_rcnn_cls, loss_rcnn_box, loss_mask, loss_pose))
+          if args.use_tfboard:
+            info = {
+              'loss': loss_temp,
+              'loss_rpn_cls': loss_rpn_cls,
+              'loss_rpn_box': loss_rpn_box,
+              'loss_rcnn_cls': loss_rcnn_cls,
+              'loss_rcnn_box': loss_rcnn_box,
+              'loss_mask': loss_mask,
+              'loss_pose': loss_pose
+            }
+            for tag, value in info.items():
+              logger.add_scalar(tag, value, iters_per_epoch * epoch + step)
 
-        print("[%s][session %d][epoch %2d][iter %4d / %4d]"
-              % (run_name, args.session, epoch, step, iters_per_epoch))
-        print("\t\tloss: %.4f, lr: %.2e" % (loss_temp, lr))
-        print("\t\tfg/bg=(%d/%d), time cost: %f" % (fg_cnt, bg_cnt, end-start))
-        print("\t\trpn_cls: %.4f, rpn_box: %.4f, rcnn_cls: %.4f, rcnn_box %.4f, mask %.4f, pose %.4f"
-              % (loss_rpn_cls, loss_rpn_box, loss_rcnn_cls, loss_rcnn_box, loss_mask, loss_pose))
-        if args.use_tfboard:
-          info = {
-            'loss': loss_temp,
-            'loss_rpn_cls': loss_rpn_cls,
-            'loss_rpn_box': loss_rpn_box,
-            'loss_rcnn_cls': loss_rcnn_cls,
-            'loss_rcnn_box': loss_rcnn_box,
-            'loss_mask': loss_mask,
-            'loss_pose': loss_pose
-          }
-          for tag, value in info.items():
-            logger.add_scalar(tag, value, iters_per_epoch * epoch + step)
+          loss_temp = 0
+          start = time.time()
 
-        loss_temp = 0
-        start = time.time()
+      # --- End of epoch ---
+      # save checkpoint
+      save(args, epoch, step, maskRCNN, optimizer, iters_per_epoch)
+      # adjust learning rate
+      if (epoch+1) % args.lr_decay_step == 0:
+          adjust_learning_rate(optimizer, args.lr_decay_gamma)
+          lr *= args.lr_decay_gamma
 
-    # save at the end of each epoch
+  except (RuntimeError, KeyboardInterrupt) as e:
+    print('Save on exception:', e)
     save(args, epoch, step, maskRCNN, optimizer, iters_per_epoch)
-    end = time.time()
-    print(end - start)
-
-  # Training ends
-  logger.close()
+    tb = traceback.format_exc()
+    print(tb)
+  finally:
+    # Training ends
+    logger.close()
