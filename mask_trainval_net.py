@@ -17,6 +17,8 @@ import pdb
 import traceback
 import time
 from tqdm import tqdm
+import cv2
+cv2.setNumThreads(0)  # pytorch issue 1355: possible deadlock in dataloader
 
 import torch
 from torch.autograd import Variable
