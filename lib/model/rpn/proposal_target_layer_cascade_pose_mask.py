@@ -213,7 +213,7 @@ class _ProposalTargetLayer(nn.Module):
             rois_batch[i,:,0] = i
 
             gt_rois_batch[i] = gt_boxes[i][gt_assignment[i][keep_inds]]
-            gt_poses_keep[i] = gt_poses[i][gt_assignment[i][keep_inds]]
+            gt_poses_keep[i] = gt_poses[i][gt_assignment[i][keep_inds].cpu()]
 
             # cropped to bbox boundaries and resized to neural network output size
             # use masks_weights to select valid masks: foreground and rounded box area > 0
