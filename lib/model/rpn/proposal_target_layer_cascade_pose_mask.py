@@ -30,7 +30,7 @@ class _ProposalTargetLayer(nn.Module):
         self.BBOX_NORMALIZE_STDS = torch.FloatTensor(cfg.TRAIN.BBOX_NORMALIZE_STDS)
         self.BBOX_INSIDE_WEIGHTS = torch.FloatTensor(cfg.TRAIN.BBOX_INSIDE_WEIGHTS)
 
-    def forward(self, all_rois, gt_boxes, num_boxes, gt_masks):
+    def forward(self, all_rois, gt_boxes, num_boxes, gt_masks, gt_poses):
 
         self.BBOX_NORMALIZE_MEANS = self.BBOX_NORMALIZE_MEANS.type_as(gt_boxes)
         self.BBOX_NORMALIZE_STDS = self.BBOX_NORMALIZE_STDS.type_as(gt_boxes)
@@ -49,7 +49,7 @@ class _ProposalTargetLayer(nn.Module):
 
         labels, rois, bbox_targets, bbox_inside_weights, masks, masks_weights = self._sample_rois_pytorch(
             all_rois, gt_boxes, fg_rois_per_image,
-            rois_per_image, self._num_classes, gt_masks)
+            rois_per_image, self._num_classes, gt_masks, gt_poses)
 
         bbox_outside_weights = (bbox_inside_weights > 0).float()
 
@@ -111,7 +111,7 @@ class _ProposalTargetLayer(nn.Module):
 
         return targets
 
-    def _sample_rois_pytorch(self, all_rois, gt_boxes, fg_rois_per_image, rois_per_image, num_classes, gt_masks):
+    def _sample_rois_pytorch(self, all_rois, gt_boxes, fg_rois_per_image, rois_per_image, num_classes, gt_masks, gt_poses):
         """Generate a random sample of RoIs comprising foreground and background
         examples.
         """
@@ -134,10 +134,16 @@ class _ProposalTargetLayer(nn.Module):
         labels_batch = labels.new(batch_size, rois_per_image).zero_()
         rois_batch = all_rois.new(batch_size, rois_per_image, 5).zero_()
         gt_rois_batch = all_rois.new(batch_size, rois_per_image, 5).zero_()
+
         gt_masks = gt_masks.cpu()  # convert to cpu, because of resizing later
-        # move to gpu later
+        # move following tensor to gpu later
         gt_masks_batch = gt_masks.new(batch_size, rois_per_image, cfg.TRAIN.MASK_SHAPE[0], cfg.TRAIN.MASK_SHAPE[1]).zero_()
         masks_weights = gt_masks.new(batch_size, rois_per_image).zero_()
+
+        gt_poses_keep = gt_poses.new(batch_size, rois_per_image, gt_poses.size(2), gt_poses.size(3)).zero_()
+        # [_, _, n_kps]: contains the 1D-location (y * HEATMAP_SIZE + x) for each kp.  gt_pose is a float tensor
+        gt_poses_batch = torch.IntTensor(batch_size, rois_per_image, gt_poses.size(2)).zero_()
+        # poses_weights: clone from masks_weights later
 
         # Guard against the case when an image has fewer than max_fg_rois_per_image
         # foreground RoIs
@@ -206,6 +212,7 @@ class _ProposalTargetLayer(nn.Module):
             rois_batch[i,:,0] = i
 
             gt_rois_batch[i] = gt_boxes[i][gt_assignment[i][keep_inds]]
+            gt_poses_keep[i] = gt_poses[i][gt_assignment[i][keep_inds]]
 
             # cropped to bbox boundaries and resized to neural network output size
             # use masks_weights to select valid masks: foreground and rounded box area > 0
@@ -215,16 +222,31 @@ class _ProposalTargetLayer(nn.Module):
                 masks_weights[i, :fg_num_rois] = 1
                 # bboxes = all_rois[i][fg_inds].cpu().type(torch.IntTensor)
                 bboxes = all_rois[i][fg_inds].cpu().round().type(torch.IntTensor)
-                cnt = 0
-                for mask, bbox in zip(masks, bboxes):
+                for cnt, (mask, bbox) in enumerate(zip(masks, bboxes)):
                     _, x1, y1, x2, y2 = bbox
-                    if x1 == x2 or y1 == y2:  # box area == 0, mask cannot be resize
+                    if x1 == x2 or y1 == y2:  # rounded box area == 0, mask cannot be resize
                         masks_weights[i, cnt] = 0
                     else:
+                        # -- Mask --
                         mask_re = sktf.resize(mask[y1:y2, x1:x2].numpy(), cfg.TRAIN.MASK_SHAPE, order=0).astype(np.float32)
-                        # print(mask_re.dtype, set(mask_re.reshape(-1).tolist()))
+                        # print(mask_re.dtype, set(mask_re.reshape(-1).tolist())) --> {0.0, 1.0}
                         gt_masks_batch[i][cnt].copy_(torch.from_numpy(mask_re))
-                    cnt += 1
+                        # -- Pose --
+                        scale_h = cfg.KRCNN.HEATMAP_SIZE / (y2 - y1)
+                        scale_w = cfg.KRCNN.HEATMAP_SIZE / (x2 - x1)
+                        gt_poses_keep[i][cnt, :, :2] *= gt_poses.new([[[scale_h, scale_w, 1]]])
+
+        # round pose to integer position
+        gt_poses_keep = gt_poses_keep.round().type(torch.IntTensor)
+        gt_poses_batch = gt_poses_keep[:, :, 1] * cfg.KRCNN.HEATMAP_SIZE + gt_poses_keep[:, :, 2]
+
+        # Calculate pose weights
+        poses_weights = masks_weights.clone()
+        vis = gt_poses_keep[:, :, :, 2]
+        nonvis_ind = torch.nonzero(vis.view(-1) == 0)  # equal is safe because gt_poses_keep has been round to int
+        poses_weights = poses_weights.view(-1)
+        poses_weights[nonvis_ind] = 0
+        poses_weights = poses_weights.view_as(masks_weights)
 
         # move to corresponding gpu
         gt_masks_batch = gt_masks_batch.cuda(labels_batch.get_device())
@@ -234,6 +256,6 @@ class _ProposalTargetLayer(nn.Module):
             rois_batch[:,:,1:5], gt_rois_batch[:,:,:4])
 
         bbox_targets, bbox_inside_weights = \
-            self._get_bbox_regression_labels_pytorch(bbox_target_data, labels_batch, num_classes)
+            self._get_bbox_regression_labels_pytorch(bbox_target_data, labels_batch, num_classes)  # [batch_size, rois_per_image, 4]
 
-        return labels_batch, rois_batch, bbox_targets, bbox_inside_weights, gt_masks_batch, masks_weights
+        return labels_batch, rois_batch, bbox_targets, bbox_inside_weights, gt_masks_batch, masks_weights, gt_poses_batch, poses_weights

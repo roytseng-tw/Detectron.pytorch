@@ -15,6 +15,8 @@ import pprint
 import pdb
 import time
 from tqdm import tqdm
+import cv2
+cv2.setNumThreads(0)  # pytorch issue 1355: possible deadlock in dataloader
 
 import torch
 from torch.autograd import Variable
@@ -23,7 +25,7 @@ import torch.nn as nn
 from torch.utils.data.sampler import Sampler
 
 from roi_data_layer.roidb import combined_roidb
-from roi_data_layer.roibatchLoader_mask import roibatchLoader
+from roi_data_layer.roibatchLoader_pose_mask import roibatchLoader
 from model.utils.config import cfg, cfg_from_file, cfg_from_list
 from model.utils.misc import get_run_name
 from model.utils.net_utils import weights_normal_init, save_net, load_net, \
@@ -44,7 +46,7 @@ def parse_args():
                       help='vgg16, res101',
                       default='vgg16', type=str)
   parser.add_argument('--ls', dest='large_scale',
-                      help='whether use large imag scale',
+                      help='whether use large image scale',
                       action='store_true')
   parser.add_argument('--cag', dest='class_agnostic',
                       help='whether perform class_agnostic bbox regression',
@@ -176,40 +178,25 @@ if __name__ == '__main__':
   print('Called with args:')
   print(args)
 
-  if args.dataset == "pascal_voc":
-      args.imdb_name = "voc_2007_trainval"
-      args.imdbval_name = "voc_2007_test"
-      args.set_cfgs = ['ANCHOR_SCALES', '[8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '20']
-  elif args.dataset == "pascal_voc_0712":
-      args.imdb_name = "voc_2007_trainval+voc_2012_trainval"
-      args.imdbval_name = "voc_2007_test"
-      args.set_cfgs = ['ANCHOR_SCALES', '[8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '20']
-  elif args.dataset == "coco2017":  # for mask rcnn
-      args.imdb_name = "coco-mask_2017_train"
-      args.imdbval_name = "coco-mask_2017_val"
-      args.set_cfgs = ['ANCHOR_SCALES', '[4, 8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '50']
+  if args.dataset == "coco2017":  # for mask rcnn
+      args.imdb_name = "coco-mask-pose_2017_train"
+      args.imdbval_name = "coco-mask-pose_2017_val"
+      args.set_cfgs = ['ANCHOR_SCALES', '[4, 8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '50', 'KRCNN.NUM_KEYPOINTS', '17']
   elif args.dataset == "coco2014":  # for mask rcnn
-      args.imdb_name = "coco-mask_2014_train+coco-mask_2014_valminusminival"
-      args.imdbval_name = "coco-mask_2014_minival"
-      args.set_cfgs = ['ANCHOR_SCALES', '[4, 8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '50']
-  elif args.dataset == "imagenet":
-      args.imdb_name = "imagenet_train"
-      args.imdbval_name = "imagenet_val"
-      args.set_cfgs = ['ANCHOR_SCALES', '[4, 8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '30']
-  elif args.dataset == "vg":
-      # train sizes: train, smalltrain, minitrain
-      # train scale: ['150-50-20', '150-50-50', '500-150-80', '750-250-150', '1750-700-450', '1600-400-20']
-      args.imdb_name = "vg_150-50-50_minitrain"
-      args.imdbval_name = "vg_150-50-50_minival"
-      args.set_cfgs = ['ANCHOR_SCALES', '[4, 8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '50']
+      args.imdb_name = "coco-mask-pose_2014_train"
+      args.imdbval_name = "coco-mask-pose_2014_val"
+      args.set_cfgs = ['ANCHOR_SCALES', '[4, 8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '50', 'KRCNN.NUM_KEYPOINTS', '17']
 
-  # args.cfg_file = "cfgs/{}_ls.yml".format(args.net) if args.large_scale else "cfgs/{}.yml".format(args.net)
-  args.cfg_file = "cfgs/res101_mask.yml"
+  args.cfg_file = "cfgs/{}_mask_ls.yml".format(args.net) if args.large_scale else "cfgs/{}_mask.yml".format(args.net)
 
   if args.cfg_file is not None:
     cfg_from_file(args.cfg_file)
   if args.set_cfgs is not None:
     cfg_from_list(args.set_cfgs)
+
+  cfg.HAS_POSE_BRANCH = True
+  cfg.POOLING_SIZE = 14
+  cfg.KRCNN.HEATMAP_SIZE = 56  # ROI_XFORM_RESOLUTION (14) * UP_SCALE (2) * USE_DECONV_OUTPUT (2)
 
   print('Using config:')
   pprint.pprint(cfg)
@@ -252,6 +239,7 @@ if __name__ == '__main__':
   num_boxes = torch.LongTensor(1)
   gt_boxes = torch.FloatTensor(1)
   gt_masks = torch.FloatTensor(1)
+  gt_poses = torch.FloatTensor(1)
 
   # ship to cuda
   if args.cuda:
@@ -260,6 +248,7 @@ if __name__ == '__main__':
     num_boxes = num_boxes.cuda()
     gt_boxes = gt_boxes.cuda()
     # gt_masks = gt_masks.cuda(), move rois_mask to cuda later is enough
+    gt_poses = gt_poses.cuda()
 
   # make variable
   im_data = Variable(im_data)
@@ -267,6 +256,7 @@ if __name__ == '__main__':
   num_boxes = Variable(num_boxes)
   gt_boxes = Variable(gt_boxes)
   gt_masks = Variable(gt_masks)
+  gt_poses = Variable(gt_poses)
 
   if args.cuda:
     cfg.CUDA = True
@@ -347,14 +337,16 @@ if __name__ == '__main__':
       gt_boxes.data.resize_(data[2].size()).copy_(data[2])
       num_boxes.data.resize_(data[3].size()).copy_(data[3])
       gt_masks.data.resize_(data[4].size()).copy_(data[4])
+      gt_poses.data.resize_(data[5].size()).copy_(data[5])
 
       rois, rois_label, cls_prob, bbox_pred, mask_pred, \
         rpn_loss_cls, rpn_loss_box, \
         RCNN_loss_cls, RCNN_loss_bbox, \
-        loss_mask \
-        = maskRCNN(im_data, im_info, gt_boxes, num_boxes, gt_masks)
+        loss_mask, loss_pose \
+        = maskRCNN(im_data, im_info, gt_boxes, num_boxes, gt_masks, gt_poses)
 
-      loss = rpn_loss_cls.mean() + rpn_loss_box.mean() + RCNN_loss_cls.mean() + RCNN_loss_bbox.mean() + loss_mask.mean()
+      loss = rpn_loss_cls.mean() + rpn_loss_box.mean() + RCNN_loss_cls.mean() + RCNN_loss_bbox.mean() \
+        + loss_mask.mean() + loss_pose.mean()
       loss_temp += loss.data[0]
 
       # backward
@@ -372,29 +364,22 @@ if __name__ == '__main__':
         if step > 0:
           loss_temp /= args.disp_interval
 
-        if args.mGPUs:
-          loss_rpn_cls = rpn_loss_cls.mean().data[0]
-          loss_rpn_box = rpn_loss_box.mean().data[0]
-          loss_rcnn_cls = RCNN_loss_cls.mean().data[0]
-          loss_rcnn_box = RCNN_loss_bbox.mean().data[0]
-          loss_mask = loss_mask.mean().data[0]
-          fg_cnt = torch.sum(rois_label.data.ne(0))
-          bg_cnt = rois_label.data.numel() - fg_cnt
-        else:
-          loss_rpn_cls = rpn_loss_cls.data[0]
-          loss_rpn_box = rpn_loss_box.data[0]
-          loss_rcnn_cls = RCNN_loss_cls.data[0]
-          loss_rcnn_box = RCNN_loss_bbox.data[0]
-          loss_mask = loss_mask.data[0]
-          fg_cnt = torch.sum(rois_label.data.ne(0))
-          bg_cnt = rois_label.data.numel() - fg_cnt
+        # .mean() in case of mGPUs
+        loss_rpn_cls = rpn_loss_cls.mean().data[0]
+        loss_rpn_box = rpn_loss_box.mean().data[0]
+        loss_rcnn_cls = RCNN_loss_cls.mean().data[0]
+        loss_rcnn_box = RCNN_loss_bbox.mean().data[0]
+        loss_mask = loss_mask.mean().data[0]
+        loss_pose = loss_pose.mean().data[0]
+        fg_cnt = torch.sum(rois_label.data.ne(0))
+        bg_cnt = rois_label.data.numel() - fg_cnt
 
         print("[%s][session %d][epoch %2d][iter %4d / %4d]"
               % (run_name, args.session, epoch, step, iters_per_epoch))
         print("\t\tloss: %.4f, lr: %.2e" % (loss_temp, lr))
         print("\t\tfg/bg=(%d/%d), time cost: %f" % (fg_cnt, bg_cnt, end-start))
-        print("\t\trpn_cls: %.4f, rpn_box: %.4f, rcnn_cls: %.4f, rcnn_box %.4f, mask %.4f"
-              % (loss_rpn_cls, loss_rpn_box, loss_rcnn_cls, loss_rcnn_box, loss_mask))
+        print("\t\trpn_cls: %.4f, rpn_box: %.4f, rcnn_cls: %.4f, rcnn_box %.4f, mask %.4f, pose %.4f"
+              % (loss_rpn_cls, loss_rpn_box, loss_rcnn_cls, loss_rcnn_box, loss_mask, loss_pose))
         if args.use_tfboard:
           info = {
             'loss': loss_temp,
@@ -402,7 +387,8 @@ if __name__ == '__main__':
             'loss_rpn_box': loss_rpn_box,
             'loss_rcnn_cls': loss_rcnn_cls,
             'loss_rcnn_box': loss_rcnn_box,
-            'loss_mask': loss_mask
+            'loss_mask': loss_mask,
+            'loss_pose': loss_pose
           }
           for tag, value in info.items():
             logger.add_scalar(tag, value, iters_per_epoch * epoch + step)

@@ -307,6 +307,20 @@ __C.CROP_RESIZE_WITH_MAX_POOL = True
 # Mask RCNN configuration
 __C.HAS_POSE_BRANCH = False
 
+# ---------------------------------------------------------------------------- #
+# Keyoint Mask R-CNN options ("KRCNN" = Mask R-CNN with Keypoint support)
+# ---------------------------------------------------------------------------- #
+__C.KRCNN = edict()
+
+# Number of keypoints in the dataset (e.g., 17 for COCO)
+__C.KRCNN.NUM_KEYPOINTS = -1
+
+# Number of stacked Conv layers in keypoint head
+__C.KRCNN.NUM_STACKED_CONVS = 8
+
+# Output size (and size loss is computed on), e.g., 56x56
+__C.KRCNN.HEATMAP_SIZE = -1
+
 import pdb
 def get_output_dir(imdb, weights_filename):
   """Return the directory where experimental artifacts are placed.

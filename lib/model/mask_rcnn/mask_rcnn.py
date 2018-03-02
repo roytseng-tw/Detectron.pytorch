@@ -8,12 +8,13 @@ from model.rpn.rpn import _RPN
 from model.roi_pooling.modules.roi_pool import _RoIPooling
 from model.roi_crop.modules.roi_crop import _RoICrop
 from model.roi_align.modules.roi_align import RoIAlignAvg
-from model.rpn.proposal_target_layer_cascade_mask import _ProposalTargetLayer
 from model.utils.net_utils import _smooth_l1_loss, _affine_grid_gen
 from model.mask_rcnn.mask_heads import mask_outputs, mask_losses, mask_head_v0up
+from model.mask_rcnn.pose_heads import pose_outputs, pose_loss, pose_head_v1convX
+
 
 class _maskRCNN(nn.Module):
-    """ faster RCNN """
+    """ mask RCNN """
     def __init__(self, classes, class_agnostic):
         super().__init__()
         self.classes = classes
@@ -22,20 +23,26 @@ class _maskRCNN(nn.Module):
 
         # define rpn
         self.RCNN_rpn = _RPN(self.dout_base_model)
+        if cfg.HAS_POSE_BRANCH:
+            from model.rpn.proposal_target_layer_cascade_mask_pose import _ProposalTargetLayer
+        else:
+            from model.rpn.proposal_target_layer_cascade_mask import _ProposalTargetLayer
         self.RCNN_proposal_target = _ProposalTargetLayer(self.n_classes)
         self.RCNN_roi_pool = _RoIPooling(cfg.POOLING_SIZE, cfg.POOLING_SIZE, 1.0/16.0)
-        self.RCNN_roi_align = RoIAlignAvg(cfg.POOLING_SIZE, cfg.POOLING_SIZE, 1.0/16.0)  #TODO: can try pool size 14
+        self.RCNN_roi_align = RoIAlignAvg(cfg.POOLING_SIZE, cfg.POOLING_SIZE, 1.0/16.0)
 
         self.grid_size = cfg.POOLING_SIZE * 2 if cfg.CROP_RESIZE_WITH_MAX_POOL else cfg.POOLING_SIZE
         self.RCNN_roi_crop = _RoICrop()
 
-    def forward(self, im_data, im_info, gt_boxes, num_boxes, gt_masks):
+    def forward(self, im_data, im_info, gt_boxes, num_boxes, gt_masks, gt_poses=None):
         batch_size = im_data.size(0)
 
         im_info = im_info.data
         gt_boxes = gt_boxes.data
         gt_masks = gt_masks.data
         num_boxes = num_boxes.data
+        if gt_poses is not None:
+            gt_poses = gt_poses.data
 
         # feed image data to base model to obtain base feature map
         base_feat = self.RCNN_base(im_data)
@@ -47,8 +54,12 @@ class _maskRCNN(nn.Module):
 
         # if it is training phrase, then use ground trubut bboxes for refining
         if self.training:
-            roi_data = self.RCNN_proposal_target(rois, gt_boxes, num_boxes, gt_masks)
-            rois, rois_label, rois_target, rois_inside_ws, rois_outside_ws, rois_mask, rois_mask_ws = roi_data
+            if cfg.HAS_POSE_BRANCH:
+                roi_data = self.RCNN_proposal_target(rois, gt_boxes, num_boxes, gt_masks, gt_poses)
+                rois, rois_label, rois_target, rois_inside_ws, rois_outside_ws, rois_mask, rois_mask_ws, rois_pose, rois_pose_ws = roi_data
+            else:
+                roi_data = self.RCNN_proposal_target(rois, gt_boxes, num_boxes, gt_masks)
+                rois, rois_label, rois_target, rois_inside_ws, rois_outside_ws, rois_mask, rois_mask_ws = roi_data
 
             rois_label = Variable(rois_label.view(-1).long())
             rois_target = Variable(rois_target.view(-1, rois_target.size(2)))
@@ -56,6 +67,9 @@ class _maskRCNN(nn.Module):
             rois_outside_ws = Variable(rois_outside_ws.view(-1, rois_outside_ws.size(2)))
             rois_mask = Variable(rois_mask.view(-1, rois_mask.size(2), rois_mask.size(3)))
             rois_mask_ws = Variable(rois_mask_ws)
+            if cfg.HAS_POSE_BRANCH:
+                rois_pose = Variable(rois_pose.view(-1, rois_pose.size(2)))
+                rois_pose_ws = Variable(rois_pose_ws)
         else:
             rois_label = None
             rois_target = None
@@ -63,6 +77,9 @@ class _maskRCNN(nn.Module):
             rois_outside_ws = None
             rois_mask = None
             rois_mask_ws = None
+            if cfg.HAS_POSE_BRANCH:
+                rois_pose = None
+                rois_pose_ws = None
             rpn_loss_cls = 0
             rpn_loss_bbox = 0
 
@@ -81,11 +98,16 @@ class _maskRCNN(nn.Module):
             pooled_feat = self.RCNN_roi_align(base_feat, rois.view(-1, 5))
         elif cfg.POOLING_MODE == 'pool':
             pooled_feat = self.RCNN_roi_pool(base_feat, rois.view(-1, 5))
-        # size of pooled_feat is 256 * n * n, n==7 for resnet n==14 for vgg16
+        # size of pooled_feat is 256 * n * n, n==cfg.POOLING_SIZE
 
         # feed pooled features to mask model
         mask_feat = self.mask_head(pooled_feat)
         mask_pred = self.mask_outputs(mask_feat)
+
+        if cfg.HAS_POSE_BRANCH:
+            # feed pooled features to pose model
+            pose_feat = self.pose_head(pooled_feat)
+            pose_pred = self.pose_outputs(pose_feat)
 
         # feed pooled features to top model (detection model)
         detect_feat = self._head_to_tail(pooled_feat)  # 256 * 2048 for res101
@@ -111,14 +133,20 @@ class _maskRCNN(nn.Module):
 
             # bounding box regression L1 loss
             RCNN_loss_bbox = _smooth_l1_loss(bbox_pred, rois_target, rois_inside_ws, rois_outside_ws)
-            loss_mask = mask_losses(mask_pred, rois_mask, rois_label, rois_mask_ws)
+            RCNN_loss_mask = mask_losses(mask_pred, rois_mask, rois_label, rois_mask_ws)
+            if cfg.HAS_POSE_BRANCH:
+                RCNN_loss_pose = pose_loss(pose_pred, rois_pose, rois_pose_ws)
 
         cls_prob = cls_prob.view(batch_size, rois.size(1), -1)
         bbox_pred = bbox_pred.view(batch_size, rois.size(1), -1)
         mask_pred = mask_pred.view(batch_size, rois.size(1), -1, *mask_pred.size()[2:])
 
-        return rois, rois_label, cls_prob, bbox_pred, mask_pred, \
-            rpn_loss_cls, rpn_loss_bbox, RCNN_loss_cls, RCNN_loss_bbox, loss_mask
+        if cfg.HAS_POSE_BRANCH:
+            return rois, rois_label, cls_prob, bbox_pred, mask_pred, \
+                rpn_loss_cls, rpn_loss_bbox, RCNN_loss_cls, RCNN_loss_bbox, RCNN_loss_mask, RCNN_loss_pose
+        else:
+            return rois, rois_label, cls_prob, bbox_pred, mask_pred, \
+                rpn_loss_cls, rpn_loss_bbox, RCNN_loss_cls, RCNN_loss_bbox, RCNN_loss_mask
 
     def _init_weights(self):
         def normal_init(m, mean, stddev, truncated=False):
@@ -140,7 +168,12 @@ class _maskRCNN(nn.Module):
 
     def create_architecture(self):
         self._init_modules()
+
         # define mask network
         self.mask_head = mask_head_v0up(self.dout_base_model)
-        self.mask_outputs = mask_outputs(self.mask_head.outplanes, self.n_classes)  #TODO n_classes ? same ?
+        self.mask_outputs = mask_outputs(self.mask_head.outplanes, self.n_classes)
+        # define pose network
+        self.pose_head = pose_head_v1convX(self.dout_base_model)
+        self.pose_outputs = pose_outputs(self.pose_head.outplanes, cfg.KRCNN.NUM_KEYPOINTS)
+
         self._init_weights()
