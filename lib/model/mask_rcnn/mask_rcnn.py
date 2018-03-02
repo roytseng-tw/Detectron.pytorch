@@ -66,10 +66,10 @@ class _maskRCNN(nn.Module):
             rois_inside_ws = Variable(rois_inside_ws.view(-1, rois_inside_ws.size(2)))
             rois_outside_ws = Variable(rois_outside_ws.view(-1, rois_outside_ws.size(2)))
             rois_mask = Variable(rois_mask.view(-1, rois_mask.size(2), rois_mask.size(3)))
-            rois_mask_ws = Variable(rois_mask_ws)
+            rois_mask_ws = Variable(rois_mask_ws.view(-1))
             if cfg.HAS_POSE_BRANCH:
-                rois_pose = Variable(rois_pose.view(-1, rois_pose.size(2)))
-                rois_pose_ws = Variable(rois_pose_ws)
+                rois_pose = Variable(rois_pose.view(-1))
+                rois_pose_ws = Variable(rois_pose_ws.view(-1))
         else:
             rois_label = None
             rois_target = None

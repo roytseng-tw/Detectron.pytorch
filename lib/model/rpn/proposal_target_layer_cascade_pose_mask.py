@@ -47,13 +47,13 @@ class _ProposalTargetLayer(nn.Module):
         fg_rois_per_image = int(np.round(cfg.TRAIN.FG_FRACTION * rois_per_image))
         fg_rois_per_image = 1 if fg_rois_per_image == 0 else fg_rois_per_image
 
-        labels, rois, bbox_targets, bbox_inside_weights, masks, masks_weights = self._sample_rois_pytorch(
+        labels, rois, bbox_targets, bbox_inside_weights, masks, masks_weights, poses, poses_weights = self._sample_rois_pytorch(
             all_rois, gt_boxes, fg_rois_per_image,
             rois_per_image, self._num_classes, gt_masks, gt_poses)
 
         bbox_outside_weights = (bbox_inside_weights > 0).float()
 
-        return rois, labels, bbox_targets, bbox_inside_weights, bbox_outside_weights, masks, masks_weights
+        return rois, labels, bbox_targets, bbox_inside_weights, bbox_outside_weights, masks, masks_weights, poses, poses_weights
 
     def backward(self, top, propagate_down, bottom):
         """This layer does not propagate gradients."""
@@ -140,10 +140,11 @@ class _ProposalTargetLayer(nn.Module):
         gt_masks_batch = gt_masks.new(batch_size, rois_per_image, cfg.TRAIN.MASK_SHAPE[0], cfg.TRAIN.MASK_SHAPE[1]).zero_()
         masks_weights = gt_masks.new(batch_size, rois_per_image).zero_()
 
+        # gt_pose is a float tensor. gt_pose.size(2) == num_keypoints
         gt_poses_keep = gt_poses.new(batch_size, rois_per_image, gt_poses.size(2), gt_poses.size(3)).zero_()
-        # [_, _, n_kps]: contains the 1D-location (y * HEATMAP_SIZE + x) for each kp.  gt_pose is a float tensor
+        # [_, _, n_kps]: contains the 1D-location (y * HEATMAP_SIZE + x) for each kp.
         gt_poses_batch = torch.IntTensor(batch_size, rois_per_image, gt_poses.size(2)).zero_()
-        # poses_weights: clone from masks_weights later
+        # poses_weights: init from masks_weights later. size: (batch_size, rois_per_image, gt_poses.size(2))
 
         # Guard against the case when an image has fewer than max_fg_rois_per_image
         # foreground RoIs
@@ -234,23 +235,27 @@ class _ProposalTargetLayer(nn.Module):
                         # -- Pose --
                         scale_h = cfg.KRCNN.HEATMAP_SIZE / (y2 - y1)
                         scale_w = cfg.KRCNN.HEATMAP_SIZE / (x2 - x1)
-                        gt_poses_keep[i][cnt, :, :2] *= gt_poses.new([[[scale_h, scale_w, 1]]])
+                        gt_poses_keep[i, cnt, :, :2] *= eval(gt_poses.type())([[scale_h, scale_w]])
 
         # round pose to integer position
         gt_poses_keep = gt_poses_keep.round().type(torch.IntTensor)
-        gt_poses_batch = gt_poses_keep[:, :, 1] * cfg.KRCNN.HEATMAP_SIZE + gt_poses_keep[:, :, 2]
+        gt_poses_batch = gt_poses_keep[:, :, :, 1] * cfg.KRCNN.HEATMAP_SIZE + gt_poses_keep[:, :, :, 2]
 
         # Calculate pose weights
-        poses_weights = masks_weights.clone()
-        vis = gt_poses_keep[:, :, :, 2]
-        nonvis_ind = torch.nonzero(vis.view(-1) == 0)  # equal is safe because gt_poses_keep has been round to int
-        poses_weights = poses_weights.view(-1)
-        poses_weights[nonvis_ind] = 0
-        poses_weights = poses_weights.view_as(masks_weights)
+        poses_weights = torch.stack([masks_weights] * cfg.KRCNN.NUM_KEYPOINTS, dim=2)
+        vis = gt_poses_keep[:, :, :, 2].contiguous().view(-1)
+        nonvis_ind = torch.nonzero(vis == 0).view(-1)  # equal is safe because gt_poses_keep has been round to int
+        if nonvis_ind.numel() != 0:
+            poses_weights = poses_weights.view(-1)
+            poses_weights[nonvis_ind] = 0
+            poses_weights = poses_weights.view(gt_poses_keep.size()[:3])
 
         # move to corresponding gpu
-        gt_masks_batch = gt_masks_batch.cuda(labels_batch.get_device())
-        masks_weights = masks_weights.cuda(labels_batch.get_device())
+        device_id = labels_batch.get_device()
+        gt_masks_batch = gt_masks_batch.cuda(device_id)
+        masks_weights = masks_weights.cuda(device_id)
+        gt_poses_batch = gt_poses_batch.cuda(device_id)
+        poses_weights = poses_weights.cuda(device_id)
 
         bbox_target_data = self._compute_targets_pytorch(
             rois_batch[:,:,1:5], gt_rois_batch[:,:,:4])

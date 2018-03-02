@@ -28,7 +28,7 @@ def mask_losses(mask_pred, rois_mask, rois_label, weight):
     for n, l in enumerate(rois_label.data):
         mask_pred_select[n] = mask_pred[n, l]
     assert n+1 == n_rois, 'n+1={}, n_rois={}'.format(n+1, n_rois)
-    loss = F.binary_cross_entropy_with_logits(mask_pred_select, rois_mask, weight=weight.contiguous().view(-1, 1, 1))
+    loss = F.binary_cross_entropy_with_logits(mask_pred_select, rois_mask, weight.view(-1, 1, 1))
     return loss
 
 

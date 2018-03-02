@@ -196,6 +196,7 @@ if __name__ == '__main__':
 
   cfg.HAS_POSE_BRANCH = True
   cfg.POOLING_SIZE = 14
+  cfg.TRAIN.MASK_SHAPE = [28, 28]
   cfg.KRCNN.HEATMAP_SIZE = 56  # ROI_XFORM_RESOLUTION (14) * UP_SCALE (2) * USE_DECONV_OUTPUT (2)
 
   print('Using config:')
@@ -248,7 +249,7 @@ if __name__ == '__main__':
     num_boxes = num_boxes.cuda()
     gt_boxes = gt_boxes.cuda()
     # gt_masks = gt_masks.cuda(), move rois_mask to cuda later is enough
-    gt_poses = gt_poses.cuda()
+    # gt_poses = gt_poses.cuda()
 
   # make variable
   im_data = Variable(im_data)
