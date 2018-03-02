@@ -29,9 +29,9 @@ class coco_mask_pose(imdb):
     self._data_path = osp.join(cfg.DATA_DIR, 'coco')
     # load COCO API, classes, class <-> id mappings
     self._COCO = COCO(self._get_ann_file())
-    cats = self._COCO.loadCats(self._COCO.getCatIds())
-    self._classes = tuple(['__background__'] + [c['name'] for c in cats])  # 1 + 80
-    self._class_to_ind = dict(list(zip(self.classes, list(range(self.num_classes)))))  # 0 ~ 80
+    cats = self._COCO.loadCats(self._COCO.getCatIds('person'))
+    self._classes = tuple(['__background__'] + [c['name'] for c in cats])  # 1 + 1
+    self._class_to_ind = dict(list(zip(self.classes, list(range(self.num_classes)))))  # 0 ~ 1
     self._class_to_coco_cat_id = dict(list(zip([c['name'] for c in cats],
                                                self._COCO.getCatIds())))
     self._image_index = self._load_image_set_index()
