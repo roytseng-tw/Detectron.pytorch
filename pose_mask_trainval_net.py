@@ -153,7 +153,7 @@ def save(args, epoch, step, model, optimizer, iters_per_epoch):
   ckpt_dir = os.path.join(output_dir, 'ckpt')
   if not os.path.exists(ckpt_dir):
     os.makedirs(ckpt_dir)
-  save_name = os.path.join(ckpt_dir, 'mask_rcnn_{}_{}.pth'.format(epoch, step))
+  save_name = os.path.join(ckpt_dir, 'pose_mask_rcnn_{}_{}.pth'.format(epoch, step))
   if args.mGPUs:
     model = model.module
   save_checkpoint({
@@ -298,7 +298,7 @@ if __name__ == '__main__':
 
   if args.resume:
     load_name = os.path.join(output_dir,
-      'mask_rcnn_{}_{}_{}.pth'.format(args.checksession, args.checkepoch, args.checkpoint))
+      'pose_mask_rcnn_{}_{}_{}.pth'.format(args.checksession, args.checkepoch, args.checkpoint))
     print("loading checkpoint %s" % (load_name))
     checkpoint = torch.load(load_name)
     args.start_epoch = checkpoint['epoch'] + 1  # Assume to start from next epoch
