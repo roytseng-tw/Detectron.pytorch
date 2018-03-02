@@ -22,10 +22,13 @@ class mask_outputs(nn.Module):
         return x
 
 def mask_losses(mask_pred, rois_mask, rois_label, weight):
-    mask_gt = Variable(mask_pred.data.new(*mask_pred.size()).zero_())
+    n_rois, _, mask_h, mask_w = mask_pred.size()
+    mask_pred_select = Variable(mask_pred.data.new(n_rois, mask_h, mask_w))
+    # select pred mask corresponding to gt label
     for n, l in enumerate(rois_label.data):
-        mask_gt[n, l] = rois_mask[n]
-    loss = F.binary_cross_entropy_with_logits(mask_pred, mask_gt, weight=weight.contiguous().view(-1, 1, 1, 1))
+        mask_pred_select[n] = mask_pred[n, l]
+    assert n+1 == n_rois, 'n+1={}, n_rois={}'.format(n+1, n_rois)
+    loss = F.binary_cross_entropy_with_logits(mask_pred_select, rois_mask, weight=weight.contiguous().view(-1, 1, 1))
     return loss
 
 
