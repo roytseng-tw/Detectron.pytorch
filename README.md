@@ -3,6 +3,22 @@ This repository is built on [jwyang/faster-rcnn.pytorch](https://github.com/jwya
 
 **Still under construction!!**
 - bbox + mask training is working, but not sure about the accuracy.
+- For now, the gt roi mask is cropped using **rounded** bbox coord. Maybe it's better to do something like roi-align ?
+
+## Requirements
+Either python 2 or 3 should work. Tested under python 3.
+- python packages
+    - pytorch  
+    - torchvision  
+    - numpy  
+    - scipy  
+    - scikit-image  
+    - opencv  
+    - easydict
+    - tqdm
+    - pycocotools
+- An NVIDAI GPU and CUDA 8.0 or higher. Some operations only have gpu implementation.
+
 
 Below is the original readme from [jwyang/faster-rcnn.pytorch](https://github.com/jwyang/faster-rcnn.pytorch)
 
