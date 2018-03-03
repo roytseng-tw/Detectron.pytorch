@@ -172,8 +172,9 @@ class _maskRCNN(nn.Module):
         # define mask network
         self.mask_head = mask_head_v0up(self.dout_base_model)
         self.mask_outputs = mask_outputs(self.mask_head.outplanes, self.n_classes)
-        # define pose network
-        self.pose_head = pose_head_v1convX(self.dout_base_model)
-        self.pose_outputs = pose_outputs(self.pose_head.outplanes, cfg.KRCNN.NUM_KEYPOINTS)
+        if cfg.HAS_POSE_BRANCH:
+            # define pose network
+            self.pose_head = pose_head_v1convX(self.dout_base_model)
+            self.pose_outputs = pose_outputs(self.pose_head.outplanes, cfg.KRCNN.NUM_KEYPOINTS)
 
         self._init_weights()
