@@ -33,7 +33,7 @@ def find_in_path(name, path):
 #     Starts by looking for the CUDAHOME env variable. If not found, everything
 #     is based on finding 'nvcc' in the PATH.
 #     """
-# 
+#
 #     # first check if the CUDAHOME env variable is in use
 #     if 'CUDAHOME' in os.environ:
 #         home = os.environ['CUDAHOME']
@@ -119,13 +119,13 @@ ext_modules = [
         extra_compile_args={'gcc': ["-Wno-cpp", "-Wno-unused-function"]},
         include_dirs=[numpy_include]
     ),
-    Extension(
-        'pycocotools._mask',
-        sources=['pycocotools/maskApi.c', 'pycocotools/_mask.pyx'],
-        include_dirs=[numpy_include, 'pycocotools'],
-        extra_compile_args={
-            'gcc': ['-Wno-cpp', '-Wno-unused-function', '-std=c99']},
-    ),
+    # Extension(
+    #     'pycocotools._mask',
+    #     sources=['pycocotools/maskApi.c', 'pycocotools/_mask.pyx'],
+    #     include_dirs=[numpy_include, 'pycocotools'],
+    #     extra_compile_args={
+    #         'gcc': ['-Wno-cpp', '-Wno-unused-function', '-std=c99']},
+    # ),
 ]
 
 setup(
