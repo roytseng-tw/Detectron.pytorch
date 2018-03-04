@@ -423,4 +423,5 @@ if __name__ == '__main__':
     print(tb)
   finally:
     # Training ends
-    logger.close()
+    if args.use_tfboard:
+      logger.close()
