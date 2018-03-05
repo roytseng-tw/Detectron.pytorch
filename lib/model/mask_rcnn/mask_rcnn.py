@@ -34,15 +34,23 @@ class _maskRCNN(nn.Module):
         self.grid_size = cfg.POOLING_SIZE * 2 if cfg.CROP_RESIZE_WITH_MAX_POOL else cfg.POOLING_SIZE
         self.RCNN_roi_crop = _RoICrop()
 
-    def forward(self, im_data, im_info, gt_boxes, num_boxes, gt_masks, gt_poses=None):
+    def __call__(self, im_data, im_info, gt_boxes, num_boxes, gt_masks, gt_poses=None):
+        # Don't want following variables be moved to gpu.
+        # the `forward` function `nn.DataParallel` will scatter all the input(s) to gpu(s).
+        self._gt_masks = gt_masks
+        self._gt_poses = gt_poses
+        result = super().__call__(im_data, im_info, gt_boxes, num_boxes)
+        return result
+
+    def forward(self, im_data, im_info, gt_boxes, num_boxes):
         batch_size = im_data.size(0)
 
         im_info = im_info.data
         gt_boxes = gt_boxes.data
-        gt_masks = gt_masks.data
         num_boxes = num_boxes.data
-        if gt_poses is not None:
-            gt_poses = gt_poses.data
+        gt_masks = self._gt_masks.data
+        if self._gt_poses is not None:
+            gt_poses = self._gt_poses.data
 
         # feed image data to base model to obtain base feature map
         base_feat = self.RCNN_base(im_data)

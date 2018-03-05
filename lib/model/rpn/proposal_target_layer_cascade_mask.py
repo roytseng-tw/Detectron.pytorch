@@ -134,8 +134,8 @@ class _ProposalTargetLayer(nn.Module):
         labels_batch = labels.new(batch_size, rois_per_image).zero_()
         rois_batch = all_rois.new(batch_size, rois_per_image, 5).zero_()
         gt_rois_batch = all_rois.new(batch_size, rois_per_image, 5).zero_()
-        gt_masks = gt_masks.cpu()  # convert to cpu, because of resizing later
-        # move to gpu later
+
+        # move to gpu later. `gt_masks` should be a CPU tensor.
         gt_masks_batch = gt_masks.new(batch_size, rois_per_image, cfg.TRAIN.MASK_SHAPE[0], cfg.TRAIN.MASK_SHAPE[1]).zero_()
         masks_weights = gt_masks.new(batch_size, rois_per_image).zero_()
 

@@ -9,6 +9,7 @@ from __future__ import print_function
 
 import _init_paths
 import os
+import sys
 import numpy as np
 import argparse
 import pprint
@@ -191,6 +192,8 @@ if __name__ == '__main__':
       args.imdb_name = "coco-mask-pose_2014_train"
       args.imdbval_name = "coco-mask-pose_2014_val"
       args.set_cfgs = ['ANCHOR_SCALES', '[4, 8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '50', 'KRCNN.NUM_KEYPOINTS', '17']
+  else:
+      sys.exit('Unexpect args.dataset value: ', args.dataset)
 
   args.cfg_file = "cfgs/{}_mask_ls.yml".format(args.net) if args.large_scale else "cfgs/{}_mask.yml".format(args.net)
 

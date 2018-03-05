@@ -135,12 +135,11 @@ class _ProposalTargetLayer(nn.Module):
         rois_batch = all_rois.new(batch_size, rois_per_image, 5).zero_()
         gt_rois_batch = all_rois.new(batch_size, rois_per_image, 5).zero_()
 
-        gt_masks = gt_masks.cpu()  # convert to cpu, because of resizing later
-        # move following tensor to gpu later
+        # move following tensor to gpu later. `gt_masks` should be a CPU tensor.
         gt_masks_batch = gt_masks.new(batch_size, rois_per_image, cfg.TRAIN.MASK_SHAPE[0], cfg.TRAIN.MASK_SHAPE[1]).zero_()
         masks_weights = gt_masks.new(batch_size, rois_per_image).zero_()
 
-        # gt_pose is a float tensor. gt_pose.size(2) == num_keypoints
+        # `gt_poses` should be a CPU float tensor. gt_poses.size(2) == num_keypoints
         gt_poses_keep = gt_poses.new(batch_size, rois_per_image, gt_poses.size(2), gt_poses.size(3)).zero_()
         # [_, _, n_kps]: contains the 1D-location (y * HEATMAP_SIZE + x) for each kp.
         gt_poses_batch = torch.IntTensor(batch_size, rois_per_image, gt_poses.size(2)).zero_()
