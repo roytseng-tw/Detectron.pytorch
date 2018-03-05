@@ -307,6 +307,10 @@ __C.CROP_RESIZE_WITH_MAX_POOL = True
 # Mask RCNN configuration
 __C.HAS_POSE_BRANCH = False
 
+__C.MRCNN = edict()
+
+__C.MRCNN.MEMORY_EFFICIENT_LOSS = True
+
 # ---------------------------------------------------------------------------- #
 # Keyoint Mask R-CNN options ("KRCNN" = Mask R-CNN with Keypoint support)
 # ---------------------------------------------------------------------------- #
