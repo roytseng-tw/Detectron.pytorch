@@ -335,13 +335,6 @@ if __name__ == '__main__':
         num_boxes = Variable(num_boxes)
         gt_boxes = Variable(gt_boxes)
         gt_masks = Variable(gt_masks)
-
-        # make variable
-        im_data = Variable(im_data)
-        im_info = Variable(im_info)
-        num_boxes = Variable(num_boxes)
-        gt_boxes = Variable(gt_boxes)
-        gt_masks = Variable(gt_masks)
         gt_poses = Variable(gt_poses)
 
         rois, rois_label, cls_prob, bbox_pred, mask_pred, \
