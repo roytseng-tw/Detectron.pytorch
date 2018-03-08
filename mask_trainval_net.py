@@ -10,6 +10,7 @@ from __future__ import print_function
 import _init_paths
 import os
 import sys
+import distutils.util
 import numpy as np
 import argparse
 import pprint
@@ -53,6 +54,10 @@ def parse_args():
   parser.add_argument('--cag', dest='class_agnostic',
                       help='whether perform class_agnostic bbox regression',
                       action='store_true')
+
+  parser.add_argument('--detectron_arch',
+                      help='Use architecture settings as in detectron',
+                      default=True, type=distutils.util.strtobool)
 
   parser.add_argument('--save_dir', dest='save_dir',
                       help='directory to save models', default=os.path.join(os.environ['HOME'], "models"))
@@ -197,6 +202,11 @@ if __name__ == '__main__':
   cfg.TRAIN.BATCH_SIZE = 120  # chance to OOM if 128 on 1080ti
 
   args.cfg_file = "cfgs/{}_mask_ls.yml".format(args.net) if args.large_scale else "cfgs/{}_mask.yml".format(args.net)
+
+  if args.detectron_arch:
+    # e2e_mask_rcnn_R-50-C4
+    args.set_cfgs = ['ANCHOR_SCALES', '[2, 4, 8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '50',
+                     'RPN.CLS_ACTIVATION', 'sigmoid', 'RPN.OUT_DIM_AS_IN_DIM', 'True']
 
   if args.cfg_file is not None:
     cfg_from_file(args.cfg_file)

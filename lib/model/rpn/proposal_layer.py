@@ -61,10 +61,12 @@ class _ProposalLayer(nn.Module):
         # take after_nms_topN proposals after NMS
         # return the top proposals (-> RoIs top, scores top)
 
-
-        # the first set of _num_anchors channels are bg probs
-        # the second set are the fg probs
-        scores = input[0][:, self._num_anchors:, :, :]
+        if cfg.RPN.CLS_ACTIVATION == 'softmax':
+            # the first set of _num_anchors channels are bg probs
+            # the second set are the fg probs
+            scores = input[0][:, self._num_anchors:, :, :]
+        else:
+            scores = input[0]
         bbox_deltas = input[1]
         im_info = input[2]
         cfg_key = input[3]

@@ -304,6 +304,22 @@ __C.CUDA = False
 
 __C.CROP_RESIZE_WITH_MAX_POOL = True
 
+# ---------------------------------------------------------------------------- #
+# RPN options
+# ---------------------------------------------------------------------------- #
+__C.RPN = edict()
+
+# `True` for Detectron implementation.
+__C.RPN.OUT_DIM_AS_IN_DIM = False
+
+# Output dim of conv2d. Ignored if `__C.RPN.OUT_DIM_AS_IN_DIM` is True.
+# 512 is the fixed value in jwyang's implementation.
+__C.RPN.OUT_DIM = 512
+
+# 'sigmoid' or 'softmax'. Detectron use 'sigmoid'. jwyang use 'softmax'
+# This value the also affect the conv output dim of `RPN_cls_score`
+__C.RPN.CLS_ACTIVATION = 'softmax'
+
 # Mask RCNN configuration
 __C.HAS_POSE_BRANCH = False
 
