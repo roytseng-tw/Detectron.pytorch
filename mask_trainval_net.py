@@ -11,6 +11,7 @@ import _init_paths
 import os
 import sys
 import distutils.util
+import pickle
 import numpy as np
 import argparse
 import pprint
@@ -36,6 +37,8 @@ from model.utils.net_utils import weights_normal_init, save_net, load_net, \
 
 # from model.mask_rcnn.vgg16 import vgg16
 from model.mask_rcnn.resnet import resnet
+
+import detectron_weights_loader as dwl
 
 def parse_args():
   """
@@ -124,6 +127,7 @@ def parse_args():
 
 # load checkpoint
   parser.add_argument('--load_ckpt', help='checkpoint path to load')
+  parser.add_argument('--load_detectron', help='path to the detectron weight pickle file')
 
 # log and diaplay
   parser.add_argument('--use_tfboard', dest='use_tfboard',
@@ -306,6 +310,12 @@ if __name__ == '__main__':
     maskRCNN.load_state_dict(checkpoint['model'])
     if 'pooling_mode' in checkpoint.keys():
       cfg.POOLING_MODE = checkpoint['pooling_mode']
+
+  if args.load_detectron:
+    if args.net == 'res50':
+      dwl.load_detectron_weight(maskRCNN, args.load_detectron, dwl.mask_rcnn_R50_C4)
+    else:
+      raise NotImplementedError
 
   if args.mGPUs:
     maskRCNN = nn.DataParallel(maskRCNN)
