@@ -1,9 +1,11 @@
 # A Pytorch Implementation of Mask R-CNN
 This repository is built on [jwyang/faster-rcnn.pytorch](https://github.com/jwyang/faster-rcnn.pytorch). Million thanks to Jianwei Yang and Jiasen Lu's awesome work.
 
-**Still under construction!!**
-- bbox + mask training is working, but not sure about the accuracy.
-- For now, the gt roi mask is cropped using **rounded** bbox coord. Maybe it's better to do something like roi-align ?
+- (bbox + mask) and (bbox + mask + keypoint) training is done.
+- Use `mask_trainval_net.py` to train on bbox and mask. Use `pose_mask_trainval_net.py` to train on bbox, mask and keypoint.
+  Refer to original README from jwyan below for the command line arguments.
+- TODO: update the testing results!
+
 
 ## Requirements
 Either python 2 or 3 should work. Tested under python 3.
@@ -19,7 +21,10 @@ Either python 2 or 3 should work. Tested under python 3.
     - pycocotools
 - An NVIDAI GPU and CUDA 8.0 or higher. Some operations only have gpu implementation.
 
+## Some notes
+- For now, the gt roi mask is cropped using **rounded** bbox coord. Maybe it's better to do something like roi-align ?
 
+===============  
 Below is the original readme from [jwyang/faster-rcnn.pytorch](https://github.com/jwyang/faster-rcnn.pytorch)
 
 ## Introduction
