@@ -187,11 +187,11 @@ if __name__ == '__main__':
   if args.dataset == "coco2017":  # for mask rcnn
       args.imdb_name = "coco-mask-pose_2017_train"
       args.imdbval_name = "coco-mask-pose_2017_val"
-      args.set_cfgs = ['ANCHOR_SCALES', '[4, 8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '50', 'KRCNN.NUM_KEYPOINTS', '17']
+      args.set_cfgs = ['ANCHOR_SCALES', '[4, 8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '15', 'KRCNN.NUM_KEYPOINTS', '17']
   elif args.dataset == "coco2014":  # for mask rcnn
       args.imdb_name = "coco-mask-pose_2014_train"
       args.imdbval_name = "coco-mask-pose_2014_val"
-      args.set_cfgs = ['ANCHOR_SCALES', '[4, 8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '50', 'KRCNN.NUM_KEYPOINTS', '17']
+      args.set_cfgs = ['ANCHOR_SCALES', '[4, 8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '15', 'KRCNN.NUM_KEYPOINTS', '17']
   else:
       sys.exit('Unexpect args.dataset value: ', args.dataset)
 
@@ -206,6 +206,7 @@ if __name__ == '__main__':
   cfg.POOLING_SIZE = 14
   cfg.TRAIN.MASK_SHAPE = [28, 28]
   cfg.KRCNN.HEATMAP_SIZE = 56  # ROI_XFORM_RESOLUTION (14) * UP_SCALE (2) * USE_DECONV_OUTPUT (2)
+  cfg.TRAIN.BATCH_SIZE = 100
 
   print('Using config:')
   pprint.pprint(cfg)
