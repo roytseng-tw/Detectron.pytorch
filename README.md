@@ -27,8 +27,10 @@ Either python 2 or 3 should work. Tested under python 3 (recommend).
     - scikit-image  
     - opencv  
     - easydict
+    - pyyaml
     - tqdm
     - pycocotools
+
 - An NVIDAI GPU and CUDA 8.0 or higher. Some operations only have gpu implementation.
 
 ## Getting Started
