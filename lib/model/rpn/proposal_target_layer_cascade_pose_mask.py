@@ -240,7 +240,7 @@ class _ProposalTargetLayer(nn.Module):
 
         # round pose to integer position
         gt_poses_keep = gt_poses_keep.round().type(torch.IntTensor)
-        gt_poses_batch = gt_poses_keep[:, :, :, 1] * cfg.KRCNN.HEATMAP_SIZE + gt_poses_keep[:, :, :, 2]
+        gt_poses_batch = gt_poses_keep[:, :, :, 1] * cfg.KRCNN.HEATMAP_SIZE + gt_poses_keep[:, :, :, 0]
 
         # Calculate pose weights
         poses_weights = torch.stack([masks_weights] * cfg.KRCNN.NUM_KEYPOINTS, dim=2)
