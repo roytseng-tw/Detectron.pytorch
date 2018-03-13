@@ -18,7 +18,7 @@ from model.utils.config import cfg, cfg_from_list
 def mask_rcnn_R50_C4():
   # mapping names from detectron weights to torch weights
   name_mapping = {
-    'conv1_w': 'RCNN_base.0.weigth',
+    'conv1_w': 'RCNN_base.0.weight',
     # 'conv1_b' : There should be no bias. However,
     #             small values around e-9,10 in detectron weight.
     'res_conv1_bn_s': 'RCNN_base.1.weight',
@@ -29,7 +29,7 @@ def mask_rcnn_R50_C4():
   for block_id, n in enumerate(nblocks, start=2):
     for i in range(n):
       d_prefix = 'res%d_%d' % (block_id, i)  # name prefix of detectron weight
-      if block_id < 3:
+      if block_id < 5:
         p_prefix = 'RCNN_base.%d.%d' % (block_id + 2, i)  # name prefix of pytorch weight
       else: # res5
         p_prefix = 'RCNN_top.0.%d' % (i)
@@ -63,6 +63,14 @@ def mask_rcnn_R50_C4():
     'rpn_cls_logits_b': 'RCNN_rpn.RPN_cls_score.bias'
   })
 
+  # RCNN
+  name_mapping.update({
+    'cls_score_w': 'RCNN_cls_score.weight',
+    'cls_score_b': 'RCNN_cls_score.bias',
+    'bbox_pred_w': 'RCNN_bbox_pred.weight',
+    'bbox_pred_b': 'RCNN_bbox_pred.bias'
+  })
+
   # MASK
   name_mapping.update({
     'conv5_mask_w': 'mask_head.upconv5.weight',
@@ -83,8 +91,10 @@ def load_detectron_weight(net, detectron_weight_file, map_func):
   name_mapping = dict((v, k) for k, v in name_mapping.items())
   params = net.state_dict()
   for p_name, p_tensor in params.items():
+    if p_name.endswith('running_mean') or p_name.endswith('running_var'):
+      continue
     if p_name.startswith('mask_head.res5'):
-      p_name.replace('mask_head.res5', 'RCNN_top.0')
+      p_name = p_name.replace('mask_head.res5', 'RCNN_top.0', 1)
     d_name = name_mapping[p_name]
     p_tensor.copy_(torch.Tensor(src_blobs[d_name]))
 
@@ -94,4 +104,5 @@ if __name__ == '__main__':
               'RPN.CLS_ACTIVATION', 'sigmoid', 'RPN.OUT_DIM_AS_IN_DIM', 'True']
   cfg_from_list(set_cfgs)
   maskRCNN = resnet([str(n) for n in range(81)], 50, pretrained=True, class_agnostic=False)
-  load_detectron_weight(maskRCNN, '/home/roytseng/detectron_models/e2e_mask_rcnn_R-50-C4_2x.pkl')
+  maskRCNN.create_architecture()
+  load_detectron_weight(maskRCNN, '/home/roytseng/detectron_models/e2e_mask_rcnn_R-50-C4_2x.pkl', mask_rcnn_R50_C4)
