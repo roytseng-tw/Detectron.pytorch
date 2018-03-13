@@ -164,8 +164,9 @@ python mask_trainval_net.py --load_ckpt path/to/the/checkpoint_file ...
 
 - Improve the flexibility of dataloader. Make number of images used per batch configurable. Now, it's hard coded to 1 per batch.
 
-- Implement a customized `nn.DataParallel` which can pass through gpu tensors along with cpu tensors. Pytorch's `nn.DataParallel` will scatter all the inputs to gpu memory if cuda is available, but some inputs don't need to be on gpu so early. For better gpu memory efficiency, only part of original inputs, which will reduce in size, have to be put on gpu.  
+- Implement a customized `nn.DataParallel` which can pass through gpu tensors along with cpu tensors. Pytorch's `nn.DataParallel` will scatter all the inputs to gpu memory if cuda is available, but some inputs don't need to be on gpu so early. For better gpu memory efficiency, only part of original inputs, which will reduce in size, have to be put on gpu.
 
+- Improve the mask_rcnn module interface for testing. Remove unnecessary inputs.
 
 ## Benchmarking of faster-rcnn
 Copied from [jwyang/faster-rcnn.pytorch](https://github.com/jwyang/faster-rcnn.pytorch)
