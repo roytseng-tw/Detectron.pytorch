@@ -118,9 +118,6 @@ __C.TRAIN.BBOX_NORMALIZE_TARGETS_PRECOMPUTED = True
 __C.TRAIN.BBOX_NORMALIZE_MEANS = (0.0, 0.0, 0.0, 0.0)
 __C.TRAIN.BBOX_NORMALIZE_STDS = (0.1, 0.1, 0.2, 0.2)
 
-# Mask RCNN
-__C.TRAIN.MASK_SHAPE = [14, 14]
-
 # Train using these proposals
 __C.TRAIN.PROPOSAL_METHOD = 'gt'
 
@@ -314,6 +311,7 @@ __C.CUDA = False
 
 __C.CROP_RESIZE_WITH_MAX_POOL = True
 
+
 # ---------------------------------------------------------------------------- #
 # Model options
 # ---------------------------------------------------------------------------- #
@@ -328,6 +326,7 @@ __C.MODEL = edict()
 # (10., 10., 5., 5.) by default. These are approximately the weights one would 
 # get from COCO using the previous unit stdev heuristic.
 __C.MODEL.BBOX_REG_WEIGHTS = (1., 1., 1., 1.)
+
 
 # ---------------------------------------------------------------------------- #
 # RPN options
@@ -348,9 +347,20 @@ __C.RPN.CLS_ACTIVATION = 'softmax'
 # Mask RCNN configuration
 __C.HAS_POSE_BRANCH = False
 
+
+# ---------------------------------------------------------------------------- #
+# Mask R-CNN options ("MRCNN" means Mask R-CNN)
+# ---------------------------------------------------------------------------- #
 __C.MRCNN = edict()
 
 __C.MRCNN.MEMORY_EFFICIENT_LOSS = True
+
+__C.MRCNN.RESOLUTION = 14
+
+# Use class specific mask predictions if True (otherwise use class agnostic mask
+# predictions)
+__C.MRCNN.CLS_SPECIFIC_MASK = True
+
 
 # ---------------------------------------------------------------------------- #
 # Keyoint Mask R-CNN options ("KRCNN" = Mask R-CNN with Keypoint support)
@@ -365,6 +375,7 @@ __C.KRCNN.NUM_STACKED_CONVS = 8
 
 # Output size (and size loss is computed on), e.g., 56x56
 __C.KRCNN.HEATMAP_SIZE = -1
+
 
 import pdb
 def get_output_dir(imdb, weights_filename):

@@ -136,7 +136,7 @@ class _ProposalTargetLayer(nn.Module):
         gt_rois_batch = all_rois.new(batch_size, rois_per_image, 5).zero_()
 
         # move to gpu later. `gt_masks` should be a CPU tensor.
-        gt_masks_batch = gt_masks.new(batch_size, rois_per_image, cfg.TRAIN.MASK_SHAPE[0], cfg.TRAIN.MASK_SHAPE[1]).zero_()
+        gt_masks_batch = gt_masks.new(batch_size, rois_per_image, cfg.MRCNN.RESOLUTION, cfg.MRCNN.RESOLUTION).zero_()
         masks_weights = gt_masks.new(batch_size, rois_per_image).zero_()
 
         # Guard against the case when an image has fewer than max_fg_rois_per_image
@@ -221,7 +221,7 @@ class _ProposalTargetLayer(nn.Module):
                     if x1 == x2 or y1 == y2:  # box area == 0, mask cannot be resize
                         masks_weights[i, cnt] = 0
                     else:
-                        mask_re = sktf.resize(mask[y1:y2, x1:x2].numpy(), cfg.TRAIN.MASK_SHAPE, order=0).astype(np.float32)
+                        mask_re = sktf.resize(mask[y1:y2, x1:x2].numpy(), cfg.MRCNN.RESOLUTION, order=0).astype(np.float32)
                         # print(mask_re.dtype, set(mask_re.reshape(-1).tolist()))
                         gt_masks_batch[i][cnt].copy_(torch.from_numpy(mask_re))
                     cnt += 1

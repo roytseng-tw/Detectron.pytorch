@@ -27,12 +27,12 @@ def mask_losses(mask_pred, rois_mask, rois_label, weight):
     n_rois, n_classes, _, _ = mask_pred.size()
     # select pred mask corresponding to gt label
     if cfg.MRCNN.MEMORY_EFFICIENT_LOSS:  # About 200~300 MB less. Not really sure how.
-        mask_pred_select = Variable(mask_pred.data.new(n_rois, cfg.TRAIN.MASK_SHAPE[0], cfg.TRAIN.MASK_SHAPE[1]))
+        mask_pred_select = Variable(mask_pred.data.new(n_rois, cfg.MRCNN.RESOLUTION, cfg.MRCNN.RESOLUTION))
         for n, l in enumerate(rois_label.data):
             mask_pred_select[n] = mask_pred[n, l]
     else:
         inds = rois_label.data + torch.arange(0, n_rois * n_classes, n_classes).long().cuda(rois_label.data.get_device())
-        mask_pred_select = mask_pred.view(-1, cfg.TRAIN.MASK_SHAPE[0], cfg.TRAIN.MASK_SHAPE[1])[inds]
+        mask_pred_select = mask_pred.view(-1, cfg.MRCNN.RESOLUTION, cfg.MRCNN.RESOLUTION)[inds]
     loss = F.binary_cross_entropy_with_logits(mask_pred_select, rois_mask, weight.view(-1, 1, 1))
     return loss
 
