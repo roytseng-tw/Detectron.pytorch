@@ -66,7 +66,7 @@ class _RPN(nn.Module):
 
         if cfg.RPN.CLS_ACTIVATION == 'softmax':
             rpn_cls_score_reshape = self.reshape(rpn_cls_score, 2)  # 2(bg/fg)
-            rpn_cls_prob_reshape = F.softmax(rpn_cls_score_reshape)
+            rpn_cls_prob_reshape = F.softmax(rpn_cls_score_reshape, dim=1)
             rpn_cls_prob = self.reshape(rpn_cls_prob_reshape, self.nc_score_out)
         else:
             rpn_cls_prob = F.sigmoid(rpn_cls_score)
