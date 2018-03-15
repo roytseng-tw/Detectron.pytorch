@@ -315,6 +315,21 @@ __C.CUDA = False
 __C.CROP_RESIZE_WITH_MAX_POOL = True
 
 # ---------------------------------------------------------------------------- #
+# Model options
+# ---------------------------------------------------------------------------- #
+__C.MODEL = edict()
+
+# Default weights on (dx, dy, dw, dh) for normalizing bbox regression targets
+# These are empirically chosen to approximately lead to unit variance targets
+#
+# In older versions, the weights were set such that the regression deltas 
+# would have unit standard deviation on the training dataset. Presently, rather
+# than computing these statistics exactly, we use a fixed set of weights
+# (10., 10., 5., 5.) by default. These are approximately the weights one would 
+# get from COCO using the previous unit stdev heuristic.
+__C.MODEL.BBOX_REG_WEIGHTS = (1., 1., 1., 1.)
+
+# ---------------------------------------------------------------------------- #
 # RPN options
 # ---------------------------------------------------------------------------- #
 __C.RPN = edict()
