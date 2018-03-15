@@ -208,6 +208,15 @@ __C.TEST.MODE = 'nms'
 # Only useful when TEST.MODE is 'top', specifies the number of top proposals to select
 __C.TEST.RPN_TOP_N = 5000
 
+# Minimum score threshold (assuming scores in a [0, 1] range); a value chosen to
+# balance obtaining high recall with not having too many low precision
+# detections that will slow down inference post processing steps (like NMS)
+__C.TEST.SCORE_THRESH = 0.05
+
+# Maximum number of detections to return per image (100 is based on the limit
+# established for the COCO dataset)
+__C.TEST.DETECTIONS_PER_IM = 100
+
 #
 # ResNet options
 #
@@ -257,6 +266,7 @@ __C.DEDUP_BOXES = 1. / 16.
 # Pixel mean values (BGR order) as a (1, 1, 3) array
 # We use the same pixel mean for all networks even though it's not exactly what
 # they were trained with
+# "Fun" fact: the history of where these values comes from is lost (From Detectron lol)
 __C.PIXEL_MEANS = np.array([[[102.9801, 115.9465, 122.7717]]])
 
 # For reproducibility
@@ -303,6 +313,21 @@ __C.FEAT_STRIDE = [16, ]
 __C.CUDA = False
 
 __C.CROP_RESIZE_WITH_MAX_POOL = True
+
+# ---------------------------------------------------------------------------- #
+# Model options
+# ---------------------------------------------------------------------------- #
+__C.MODEL = edict()
+
+# Default weights on (dx, dy, dw, dh) for normalizing bbox regression targets
+# These are empirically chosen to approximately lead to unit variance targets
+#
+# In older versions, the weights were set such that the regression deltas 
+# would have unit standard deviation on the training dataset. Presently, rather
+# than computing these statistics exactly, we use a fixed set of weights
+# (10., 10., 5., 5.) by default. These are approximately the weights one would 
+# get from COCO using the previous unit stdev heuristic.
+__C.MODEL.BBOX_REG_WEIGHTS = (1., 1., 1., 1.)
 
 # ---------------------------------------------------------------------------- #
 # RPN options

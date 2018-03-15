@@ -103,7 +103,7 @@ class _ProposalTargetLayer(nn.Module):
         batch_size = ex_rois.size(0)
         rois_per_image = ex_rois.size(1)
 
-        targets = bbox_transform_batch(ex_rois, gt_rois)
+        targets = bbox_transform_batch(ex_rois, gt_rois, cfg.MODEL.BBOX_REG_WEIGHTS)
 
         if cfg.TRAIN.BBOX_NORMALIZE_TARGETS_PRECOMPUTED:
             # Optionally normalize targets by a precomputed mean and stdev

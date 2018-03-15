@@ -12,7 +12,7 @@ import torch
 import numpy as np
 import pdb
 
-def bbox_transform(ex_rois, gt_rois):
+def bbox_transform(ex_rois, gt_rois, weights=(1.0, 1.0, 1.0, 1.0)):
     ex_widths = ex_rois[:, 2] - ex_rois[:, 0] + 1.0
     ex_heights = ex_rois[:, 3] - ex_rois[:, 1] + 1.0
     ex_ctr_x = ex_rois[:, 0] + 0.5 * ex_widths
@@ -22,18 +22,19 @@ def bbox_transform(ex_rois, gt_rois):
     gt_heights = gt_rois[:, 3] - gt_rois[:, 1] + 1.0
     gt_ctr_x = gt_rois[:, 0] + 0.5 * gt_widths
     gt_ctr_y = gt_rois[:, 1] + 0.5 * gt_heights
-
-    targets_dx = (gt_ctr_x - ex_ctr_x) / ex_widths
-    targets_dy = (gt_ctr_y - ex_ctr_y) / ex_heights
-    targets_dw = torch.log(gt_widths / ex_widths)
-    targets_dh = torch.log(gt_heights / ex_heights)
+    
+    wx, wy, ww, wh = weights
+    targets_dx = wx * (gt_ctr_x - ex_ctr_x) / ex_widths
+    targets_dy = wy * (gt_ctr_y - ex_ctr_y) / ex_heights
+    targets_dw = ww * torch.log(gt_widths / ex_widths)
+    targets_dh = wh * torch.log(gt_heights / ex_heights)
 
     targets = torch.stack(
         (targets_dx, targets_dy, targets_dw, targets_dh),1)
 
     return targets
 
-def bbox_transform_batch(ex_rois, gt_rois):
+def bbox_transform_batch(ex_rois, gt_rois, weights=(1.0, 1.0, 1.0, 1.0)):
 
     if ex_rois.dim() == 2:
         ex_widths = ex_rois[:, 2] - ex_rois[:, 0] + 1.0
@@ -45,11 +46,12 @@ def bbox_transform_batch(ex_rois, gt_rois):
         gt_heights = gt_rois[:, :, 3] - gt_rois[:, :, 1] + 1.0
         gt_ctr_x = gt_rois[:, :, 0] + 0.5 * gt_widths
         gt_ctr_y = gt_rois[:, :, 1] + 0.5 * gt_heights
-
-        targets_dx = (gt_ctr_x - ex_ctr_x.view(1,-1).expand_as(gt_ctr_x)) / ex_widths
-        targets_dy = (gt_ctr_y - ex_ctr_y.view(1,-1).expand_as(gt_ctr_y)) / ex_heights
-        targets_dw = torch.log(gt_widths / ex_widths.view(1,-1).expand_as(gt_widths))
-        targets_dh = torch.log(gt_heights / ex_heights.view(1,-1).expand_as(gt_heights))
+        
+        wx, wy, ww, wh = weights
+        targets_dx = wx * (gt_ctr_x - ex_ctr_x.view(1,-1).expand_as(gt_ctr_x)) / ex_widths
+        targets_dy = wy * (gt_ctr_y - ex_ctr_y.view(1,-1).expand_as(gt_ctr_y)) / ex_heights
+        targets_dw = ww * torch.log(gt_widths / ex_widths.view(1,-1).expand_as(gt_widths))
+        targets_dh = wh * torch.log(gt_heights / ex_heights.view(1,-1).expand_as(gt_heights))
 
     elif ex_rois.dim() == 3:
         ex_widths = ex_rois[:, :, 2] - ex_rois[:, :, 0] + 1.0
@@ -62,10 +64,11 @@ def bbox_transform_batch(ex_rois, gt_rois):
         gt_ctr_x = gt_rois[:, :, 0] + 0.5 * gt_widths
         gt_ctr_y = gt_rois[:, :, 1] + 0.5 * gt_heights
 
-        targets_dx = (gt_ctr_x - ex_ctr_x) / ex_widths
-        targets_dy = (gt_ctr_y - ex_ctr_y) / ex_heights
-        targets_dw = torch.log(gt_widths / ex_widths)
-        targets_dh = torch.log(gt_heights / ex_heights)
+        wx, wy, ww, wh = weights
+        targets_dx = wx * (gt_ctr_x - ex_ctr_x) / ex_widths
+        targets_dy = wy * (gt_ctr_y - ex_ctr_y) / ex_heights
+        targets_dw = ww * torch.log(gt_widths / ex_widths)
+        targets_dh = wh * torch.log(gt_heights / ex_heights)
     else:
         raise ValueError('ex_roi input dimension is not correct.')
 
@@ -74,16 +77,17 @@ def bbox_transform_batch(ex_rois, gt_rois):
 
     return targets
 
-def bbox_transform_inv(boxes, deltas, batch_size):
+def bbox_transform_inv(boxes, deltas, batch_size, weights=(1.0, 1.0, 1.0, 1.0)):
     widths = boxes[:, :, 2] - boxes[:, :, 0] + 1.0
     heights = boxes[:, :, 3] - boxes[:, :, 1] + 1.0
     ctr_x = boxes[:, :, 0] + 0.5 * widths
     ctr_y = boxes[:, :, 1] + 0.5 * heights
 
-    dx = deltas[:, :, 0::4]
-    dy = deltas[:, :, 1::4]
-    dw = deltas[:, :, 2::4]
-    dh = deltas[:, :, 3::4]
+    wx, wy, ww, wh = weights
+    dx = deltas[:, :, 0::4] / wx
+    dy = deltas[:, :, 1::4] / wy
+    dw = deltas[:, :, 2::4] / ww
+    dh = deltas[:, :, 3::4] / wh
 
     pred_ctr_x = dx * widths.unsqueeze(2) + ctr_x.unsqueeze(2)
     pred_ctr_y = dy * heights.unsqueeze(2) + ctr_y.unsqueeze(2)
@@ -95,10 +99,10 @@ def bbox_transform_inv(boxes, deltas, batch_size):
     pred_boxes[:, :, 0::4] = pred_ctr_x - 0.5 * pred_w
     # y1
     pred_boxes[:, :, 1::4] = pred_ctr_y - 0.5 * pred_h
-    # x2
-    pred_boxes[:, :, 2::4] = pred_ctr_x + 0.5 * pred_w
-    # y2
-    pred_boxes[:, :, 3::4] = pred_ctr_y + 0.5 * pred_h
+    # x2 (note: "- 1" is correct; don't be fooled by the asymmetry)
+    pred_boxes[:, :, 2::4] = pred_ctr_x + 0.5 * pred_w - 1
+    # y2 (note: "- 1" is correct; don't be fooled by the asymmetry)
+    pred_boxes[:, :, 3::4] = pred_ctr_y + 0.5 * pred_h - 1
 
     return pred_boxes
 
