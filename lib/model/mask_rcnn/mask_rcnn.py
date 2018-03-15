@@ -127,6 +127,9 @@ class _maskRCNN(nn.Module):
 
         RCNN_loss_cls = 0
         RCNN_loss_bbox = 0
+        RCNN_loss_mask = 0
+        if cfg.HAS_POSE_BRANCH:
+            RCNN_loss_pose = 0
 
         if self.training:
             # classification loss
