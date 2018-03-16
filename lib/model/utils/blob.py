@@ -32,6 +32,7 @@ def im_list_to_blob(ims):
 
     return blob
 
+
 def prep_im_for_blob(im, pixel_means, target_size, max_size):
     """Mean subtract and scale an image for use in a blob."""
 
@@ -50,3 +51,17 @@ def prep_im_for_blob(im, pixel_means, target_size, max_size):
                     interpolation=cv2.INTER_LINEAR)
 
     return im, im_scale
+
+
+def zeros(shape, int32=False):
+    """Return a blob of all zeros of the given shape with the correct float or
+    int data type.
+    """
+    return np.zeros(shape, dtype=np.int32 if int32 else np.float32)
+
+
+def ones(shape, int32=False):
+    """Return a blob of all ones of the given shape with the correct float or
+    int data type.
+    """
+    return np.ones(shape, dtype=np.int32 if int32 else np.float32)

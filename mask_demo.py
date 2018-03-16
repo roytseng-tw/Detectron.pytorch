@@ -1,7 +1,6 @@
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
-from six.moves import xrange
 
 import argparse
 import distutils.util
@@ -9,6 +8,8 @@ import os
 import sys
 import pprint
 import subprocess
+from collections import defaultdict
+from six.moves import xrange
 
 # Use a non-interactive backend
 import matplotlib
@@ -33,6 +34,7 @@ import model.utils.blob as blob_utils
 import model.utils.misc as misc_utils
 import model.utils.test as test_utils
 import model.utils.vis as vis_utils
+from model.utils.timer import Timer
 
 from model.mask_rcnn.resnet import resnet
 import detectron_weights_loader as dwl
@@ -133,6 +135,7 @@ if __name__ == '__main__':
 
   if args.dataset == "coco":
     imdb = datasets.coco_mask.coco_mask('val', '2017')
+    cfg.MODEL.NUM_CLASSES = imdb.num_classes
   else:
     raise NotImplementedError
 
@@ -152,11 +155,12 @@ if __name__ == '__main__':
 
   if args.load_detectron:
     cfg.POOLING_SIZE = 14
+    cfg.MRCNN.RESOLUTION = 28
     cfg.TEST.RPN_PRE_NMS_TOP_N = 6000
     cfg.TEST.RPN_POST_NMS_TOP_N = 1000
     cfg.TEST.MAX_SIZE = 1333
-    cfg.TEST.SCALES = (800,)
-    cfg.TEST.NMS = 0.5
+    # cfg.TEST.SCALES = (800,)
+    # cfg.TEST.NMS = 0.5
 
   print('Using config:')
   pprint.pprint(cfg)
@@ -238,18 +242,23 @@ if __name__ == '__main__':
       num_boxes = num_boxes.cuda()
       gt_masks = gt_masks.cuda()
 
+    timers = defaultdict(Timer)
+
     rois, rois_label, cls_prob, bbox_pred, mask_pred, \
       rpn_loss_cls, rpn_loss_box, \
       RCNN_loss_cls, RCNN_loss_bbox, \
       loss_mask \
       = maskRCNN(im_data, im_info, gt_boxes, num_boxes, gt_masks)
 
-    cls_boxes = test_utils.im_test_all(args, im_info, rois, rois_label, cls_prob, bbox_pred, mask_pred)
+    cls_boxes, cls_segms, cls_keyps = test_utils.im_test_all(
+      args, im_info, rois, rois_label, cls_prob, bbox_pred,
+      mask_pred, timers=timers)
 
     imname, _ = os.path.splitext(imglist[i])
     vis_utils.vis_one_image(
       im, imname, args.output_dir,
-      cls_boxes, thresh=0.5, box_alpha=0.7, dataset=imdb, show_class=True)
+      cls_boxes, cls_segms, cls_keyps,
+      thresh=0.5, box_alpha=0.7, dataset=imdb, show_class=True)
 
   if args.merge_pdfs:
     merge_out_path = '{}/results.pdf'.format(args.output_dir)

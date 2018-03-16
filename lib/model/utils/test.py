@@ -1,3 +1,30 @@
+# Written by Roy Tseng
+#
+# Based on:
+# --------------------------------------------------------
+# Copyright (c) 2017-present, Facebook, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+##############################################################################
+#
+# Based on:
+# --------------------------------------------------------
+# Fast R-CNN
+# Copyright (c) 2015 Microsoft
+# Licensed under The MIT License [see LICENSE for details]
+# Written by Ross Girshick
+# --------------------------------------------------------
+
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
@@ -13,6 +40,7 @@ from model.rpn.bbox_transform import bbox_transform_inv, clip_boxes
 from model.nms.nms_wrapper import nms
 from model.utils.config import cfg
 from model.utils.timer import Timer
+import model.utils.boxes as box_utils
 
 
 def im_test_all(
@@ -41,11 +69,30 @@ def im_test_all(
   scores, boxes, cls_boxes = box_results_with_nms_and_limit(scores, boxes, args)
   timers['misc_bbox'].toc()
 
-  # return scores, boxes
-  return cls_boxes   #, cls_segms, cls_keyps
+  [[im_h, im_w, im_scale]] = im_info.data.cpu().numpy()
+  im_h, im_w = im_h.astype(int), im_w.astype(int)
+  if mask_pred is not None:
+    mask_pred = mask_pred.data.cpu().numpy()
+    timers['im_detect_mask'].tic()
+    masks = im_test_mask(mask_pred)
+    timers['im_detect_mask'].toc()
+    timers['misc_mask'].tic()
+    cls_segms = segm_results(cls_boxes, masks, boxes, im_h, im_w)
+    timers['misc_mask'].toc()
+  else:
+    cls_segms = None
+
+  if pose_pred is not None:
+    pass
+  else:
+    cls_keyps = None
+
+  return cls_boxes, cls_segms, cls_keyps
 
 
 def im_test_bbox(im_info, rois, cls_prob, bbox_pred, args):
+  """Prepare the bbox for testing
+  """
   scores = cls_prob.data
   boxes = rois.data[:, :, 1:5]
   num_classes = scores.size(-1)
@@ -124,3 +171,85 @@ def box_results_with_nms_and_limit(scores, boxes, args):
   boxes = im_results[:, :-1]
   scores = im_results[:, -1]
   return scores, boxes, cls_boxes
+
+
+def im_test_mask(mask_pred):
+  """Prepare the mask for testing
+  Returns:
+      pred_masks (ndarray): R x K x M x M array of class specific soft masks
+          output by the network (must be processed by segm_results to convert
+          into hard masks in the original image coordinate space)
+  """
+  M = cfg.MRCNN.RESOLUTION
+
+  if cfg.MRCNN.CLS_SPECIFIC_MASK:
+    pred_masks = mask_pred.reshape([-1, cfg.MODEL.NUM_CLASSES, M, M])
+  else:
+    pred_masks = mask_pred.reshape([-1, 1, M, M])
+
+  # # truncate padded masks ??
+  # print(pred_masks.shape)
+  # nonzeros = np.any(pred_masks, axis=(1,2,3))
+  # print(nonzeros.shape)
+  # print(np.count_nonzero(nonzeros))
+  # exit()
+
+  return pred_masks
+
+
+def segm_results(cls_boxes, masks, ref_boxes, im_h, im_w):
+  num_classes = cfg.MODEL.NUM_CLASSES
+  cls_segms = [[] for _ in range(num_classes)]
+  mask_ind = 0
+  # To work around an issue with cv2.resize (it seems to automatically pad
+  # with repeated border values), we manually zero-pad the masks by 1 pixel
+  # prior to resizing back to the original image resolution. This prevents
+  # "top hat" artifacts. We therefore need to expand the reference boxes by an
+  # appropriate factor.
+  M = cfg.MRCNN.RESOLUTION
+  scale = (M + 2.0) / M
+  ref_boxes = box_utils.expand_boxes(ref_boxes, scale)
+  ref_boxes = ref_boxes.astype(np.int32)
+  padded_mask = np.zeros((M + 2, M + 2), dtype=np.float32)
+
+  # skip j = 0, because it's the background class
+  for j in range(1, num_classes):
+    segms = []
+    for _ in range(cls_boxes[j].shape[0]):
+      if cfg.MRCNN.CLS_SPECIFIC_MASK:
+        padded_mask[1:-1, 1:-1] = masks[mask_ind, j, :, :]
+      else:
+        padded_mask[1:-1, 1:-1] = masks[mask_ind, 0, :, :]
+
+      ref_box = ref_boxes[mask_ind, :]
+      w = ref_box[2] - ref_box[0] + 1
+      h = ref_box[3] - ref_box[1] + 1
+      w = np.maximum(w, 1)
+      h = np.maximum(h, 1)
+
+      mask = cv2.resize(padded_mask, (w, h))
+      mask = np.array(mask > cfg.MRCNN.THRESH_BINARIZE, dtype=np.uint8)
+      im_mask = np.zeros((im_h, im_w), dtype=np.uint8)
+
+      x_0 = max(ref_box[0], 0)
+      x_1 = min(ref_box[2] + 1, im_w)
+      y_0 = max(ref_box[1], 0)
+      y_1 = min(ref_box[3] + 1, im_h)
+
+      im_mask[y_0:y_1, x_0:x_1] = mask[
+        (y_0 - ref_box[1]):(y_1 - ref_box[1]),
+        (x_0 - ref_box[0]):(x_1 - ref_box[0])
+      ]
+
+      # Get RLE encoding used by the COCO evaluation API
+      rle = mask_util.encode(
+        np.array(im_mask[:, :, np.newaxis], order='F')
+      )[0]
+      segms.append(rle)
+
+      mask_ind += 1
+
+    cls_segms[j] = segms
+
+  # assert mask_ind == masks.shape[0], '{}, {}'.format(mask_ind, masks.shape[0])
+  return cls_segms

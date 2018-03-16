@@ -317,6 +317,10 @@ __C.CROP_RESIZE_WITH_MAX_POOL = True
 # ---------------------------------------------------------------------------- #
 __C.MODEL = edict()
 
+# Number of classes in the dataset; must be set
+# E.g., 81 for COCO (80 foreground + 1 background)
+__C.MODEL.NUM_CLASSES = -1
+
 # Default weights on (dx, dy, dw, dh) for normalizing bbox regression targets
 # These are empirically chosen to approximately lead to unit variance targets
 #
@@ -360,6 +364,9 @@ __C.MRCNN.RESOLUTION = 14
 # Use class specific mask predictions if True (otherwise use class agnostic mask
 # predictions)
 __C.MRCNN.CLS_SPECIFIC_MASK = True
+
+# Binarization threshold for converting soft masks to hard masks
+__C.MRCNN.THRESH_BINARIZE = 0.5
 
 
 # ---------------------------------------------------------------------------- #

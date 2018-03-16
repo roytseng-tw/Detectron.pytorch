@@ -1,3 +1,23 @@
+# Written by Roy Tseng
+#
+# Based on:
+# --------------------------------------------------------
+# Copyright (c) 2017-present, Facebook, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+##############################################################################
+
+
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
@@ -9,6 +29,7 @@ import os
 import pycocotools.mask as mask_util
 
 from model.utils.colormap import colormap
+import model.utils.keypoints as keypoint_utils
 
 # Use a non-interactive backend
 import matplotlib
@@ -22,6 +43,27 @@ plt.rcParams['pdf.fonttype'] = 42  # For editing in Adobe Illustrator
 _GRAY = (218, 227, 218)
 _GREEN = (18, 127, 15)
 _WHITE = (255, 255, 255)
+
+
+def kp_connections(keypoints):
+    kp_lines = [
+        [keypoints.index('left_eye'), keypoints.index('right_eye')],
+        [keypoints.index('left_eye'), keypoints.index('nose')],
+        [keypoints.index('right_eye'), keypoints.index('nose')],
+        [keypoints.index('right_eye'), keypoints.index('right_ear')],
+        [keypoints.index('left_eye'), keypoints.index('left_ear')],
+        [keypoints.index('right_shoulder'), keypoints.index('right_elbow')],
+        [keypoints.index('right_elbow'), keypoints.index('right_wrist')],
+        [keypoints.index('left_shoulder'), keypoints.index('left_elbow')],
+        [keypoints.index('left_elbow'), keypoints.index('left_wrist')],
+        [keypoints.index('right_hip'), keypoints.index('right_knee')],
+        [keypoints.index('right_knee'), keypoints.index('right_ankle')],
+        [keypoints.index('left_hip'), keypoints.index('left_knee')],
+        [keypoints.index('left_knee'), keypoints.index('left_ankle')],
+        [keypoints.index('right_shoulder'), keypoints.index('left_shoulder')],
+        [keypoints.index('right_hip'), keypoints.index('left_hip')],
+    ]
+    return kp_lines
 
 
 def convert_from_cls_format(cls_boxes, cls_segms, cls_keyps):
@@ -77,6 +119,16 @@ def vis_one_image(im, im_name, output_dir, boxes, segms=None, keypoints=None,
   if boxes is None or boxes.shape[0] == 0 or max(boxes[:, 4]) < thresh:
     return
 
+  if segms is not None:
+    masks = mask_util.decode(segms)
+
+  color_list = colormap(rgb=True) / 255
+
+  dataset_keypoints, _ = keypoint_utils.get_keypoints()
+  kp_lines = kp_connections(dataset_keypoints)
+  cmap = plt.get_cmap('rainbow')
+  colors = [cmap(i) for i in np.linspace(0, 1, len(kp_lines) + 2)]
+
   fig = plt.figure(frameon=False)
   fig.set_size_inches(im.shape[1] / dpi, im.shape[0] / dpi)
   ax = plt.Axes(fig, [0., 0., 1., 1.])
@@ -88,6 +140,7 @@ def vis_one_image(im, im_name, output_dir, boxes, segms=None, keypoints=None,
   areas = (boxes[:, 2] - boxes[:, 0]) * (boxes[:, 3] - boxes[:, 1])
   sorted_inds = np.argsort(-areas)
 
+  mask_color_id = 0
   for i in sorted_inds:
     bbox = boxes[i, :4]
     score = boxes[i, -1]
@@ -111,6 +164,30 @@ def vis_one_image(im, im_name, output_dir, boxes, segms=None, keypoints=None,
         bbox=dict(
             facecolor='g', alpha=0.4, pad=0, edgecolor='none'),
         color='white')
+    
+    # show mask
+    if segms is not None and len(segms) > i:
+      img = np.ones(im.shape)
+      color_mask = color_list[mask_color_id % len(color_list), 0:3]
+      mask_color_id += 1
+
+      w_ratio = .4
+      for c in range(3):
+        color_mask[c] = color_mask[c] * (1 - w_ratio) + w_ratio
+      for c in range(3):
+        img[:, :, c] = color_mask[c]
+      e = masks[:, :, i]
+
+      _, contour, hier = cv2.findContours(
+        e.copy(), cv2.RETR_CCOMP, cv2.CHAIN_APPROX_NONE)
+
+      for c in contour:
+        polygon = Polygon(
+          c.reshape((-1, 2)),
+          fill=True, facecolor=color_mask,
+          edgecolor='w', linewidth=1.2,
+          alpha=0.5)
+        ax.add_patch(polygon)
 
   output_name = os.path.basename(im_name) + '.' + ext
   fig.savefig(os.path.join(output_dir, '{}'.format(output_name)), dpi=dpi)
