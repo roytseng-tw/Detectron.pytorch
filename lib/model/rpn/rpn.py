@@ -44,6 +44,18 @@ class _RPN(nn.Module):
         # define anchor target layer
         self.RPN_anchor_target = _AnchorTargetLayer(self.feat_stride, self.anchor_scales, self.anchor_ratios)
 
+    def detectron_weight_mapping(self):
+        detectron_weight_mapping = {
+            'RPN_Conv.weight': 'conv_rpn_w',
+            'RPN_Conv.bias': 'conv_rpn_b',
+            'RPN_bbox_pred.weight': 'rpn_bbox_pred_w',
+            'RPN_bbox_pred.bias': 'rpn_bbox_pred_b',
+            'RPN_cls_score.weight': 'rpn_cls_logits_w',
+            'RPN_cls_score.bias' : 'rpn_cls_logits_b'
+        }
+        orphan_in_detectron = []
+        return detectron_weight_mapping, orphan_in_detectron
+
     @staticmethod
     def reshape(x, d):
         input_shape = x.size()

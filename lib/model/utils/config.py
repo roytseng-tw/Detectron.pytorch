@@ -215,22 +215,6 @@ __C.TEST.SCORE_THRESH = 0.05
 __C.TEST.DETECTIONS_PER_IM = 100
 
 #
-# ResNet options
-#
-
-__C.RESNET = edict()
-
-# Option to set if max-pooling is appended after crop_and_resize.
-# if true, the region will be resized to a square of 2xPOOLING_SIZE,
-# then 2x2 max-pooling is applied; otherwise the region will be directly
-# resized to a square of POOLING_SIZE
-__C.RESNET.MAX_POOL = False
-
-# Number of fixed blocks during training, by default the first of all 4 blocks is fixed
-# Range: 0 (none) to 3 (all)
-__C.RESNET.FIXED_BLOCKS = 1
-
-#
 # MobileNet options
 #
 
@@ -311,15 +295,25 @@ __C.CUDA = False
 
 __C.CROP_RESIZE_WITH_MAX_POOL = True
 
+# Train or Inference. This affect the model construction !!!
+__C.IS_TRAIN = True
+
 
 # ---------------------------------------------------------------------------- #
 # Model options
 # ---------------------------------------------------------------------------- #
 __C.MODEL = edict()
 
+# The backbone conv body to use
+__C.MODEL.CONV_BODY = ''
+
 # Number of classes in the dataset; must be set
 # E.g., 81 for COCO (80 foreground + 1 background)
 __C.MODEL.NUM_CLASSES = -1
+
+# Use a class agnostic bounding box regressor instead of the default per-class
+# regressor
+__C.MODEL.CLS_AGNOSTIC_BBOX_REG = False
 
 # Default weights on (dx, dy, dw, dh) for normalizing bbox regression targets
 # These are empirically chosen to approximately lead to unit variance targets
@@ -329,7 +323,21 @@ __C.MODEL.NUM_CLASSES = -1
 # than computing these statistics exactly, we use a fixed set of weights
 # (10., 10., 5., 5.) by default. These are approximately the weights one would 
 # get from COCO using the previous unit stdev heuristic.
-__C.MODEL.BBOX_REG_WEIGHTS = (1., 1., 1., 1.)
+__C.MODEL.BBOX_REG_WEIGHTS = (10., 10., 5., 5.)
+
+# Indicates the model makes instance mask predictions (as in Mask R-CNN)
+__C.MODEL.MASK_ON = False
+
+# Indicates the model makes keypoint predictions (as in Mask R-CNN for
+# keypoints)
+__C.MODEL.KEYPOINTS_ON = False
+
+# Indicates the model's computation terminates with the production of RPN
+# proposals (i.e., it outputs proposals ONLY, no actual object detections)
+__C.MODEL.RPN_ONLY = False
+
+# Indicate whether the res5 stage forward computation is shared or not on training
+__C.MODEL.SHARE_RES5 = False
 
 
 # ---------------------------------------------------------------------------- #
@@ -337,19 +345,46 @@ __C.MODEL.BBOX_REG_WEIGHTS = (1., 1., 1., 1.)
 # ---------------------------------------------------------------------------- #
 __C.RPN = edict()
 
-# `True` for Detectron implementation.
-__C.RPN.OUT_DIM_AS_IN_DIM = False
+# `True` for Detectron implementation. `False` for jwyang's implementation.
+__C.RPN.OUT_DIM_AS_IN_DIM = True
 
 # Output dim of conv2d. Ignored if `__C.RPN.OUT_DIM_AS_IN_DIM` is True.
 # 512 is the fixed value in jwyang's implementation.
 __C.RPN.OUT_DIM = 512
 
 # 'sigmoid' or 'softmax'. Detectron use 'sigmoid'. jwyang use 'softmax'
-# This value the also affect the conv output dim of `RPN_cls_score`
-__C.RPN.CLS_ACTIVATION = 'softmax'
+# This value also affect the conv output dim for `RPN_cls_score`
+__C.RPN.CLS_ACTIVATION = 'sigmoid'
 
 # Mask RCNN configuration
 __C.HAS_POSE_BRANCH = False
+
+
+# ---------------------------------------------------------------------------- #
+# Fast R-CNN options
+# ---------------------------------------------------------------------------- #
+__C.FAST_RCNN = edict()
+
+# The type of RoI head to use for bounding box classification and regression
+# The string must match a function this is imported in modeling.model_builder
+# (e.g., 'head_builder.add_roi_2mlp_head' to specify a two hidden layer MLP)
+__C.FAST_RCNN.ROI_BOX_HEAD = ''
+
+# Hidden layer dimension when using an MLP for the RoI box head
+__C.FAST_RCNN.MLP_HEAD_DIM = 1024
+
+# RoI transformation function (e.g., RoIPool or RoIAlign)
+# (RoIPoolF is the same as RoIPool; ignore the trailing 'F')
+__C.FAST_RCNN.ROI_XFORM_METHOD = b'RoIPoolF'
+
+# Number of grid sampling points in RoIAlign (usually use 2)
+# Only applies to RoIAlign
+__C.FAST_RCNN.ROI_XFORM_SAMPLING_RATIO = 0
+
+# RoI transform output resolution
+# Note: some models may have constraints on what they can use, e.g. they use
+# pretrained FC layers like in VGG16, and will ignore this option
+__C.FAST_RCNN.ROI_XFORM_RESOLUTION = 14
 
 
 # ---------------------------------------------------------------------------- #
@@ -357,9 +392,24 @@ __C.HAS_POSE_BRANCH = False
 # ---------------------------------------------------------------------------- #
 __C.MRCNN = edict()
 
+__C.MRCNN.ROI_MASK_HEAD = ''
+
 __C.MRCNN.MEMORY_EFFICIENT_LOSS = True
 
+# Resolution of mask predictions
 __C.MRCNN.RESOLUTION = 14
+
+# Number of channels in the mask head
+__C.MRCNN.DIM_REDUCED = 256
+
+# Use dilated convolution in the mask head
+__C.MRCNN.DILATION = 2
+
+# Upsample the predicted masks by this factor
+__C.MRCNN.UPSAMPLE_RATIO = 1
+
+# Weight initialization method for the mask head and mask output layers. ['GaussianFill', 'MSRAFill']
+__C.MRCNN.CONV_INIT = 'GaussianFill'
 
 # Use class specific mask predictions if True (otherwise use class agnostic mask
 # predictions)
@@ -374,6 +424,8 @@ __C.MRCNN.THRESH_BINARIZE = 0.5
 # ---------------------------------------------------------------------------- #
 __C.KRCNN = edict()
 
+__C.KRCNN.ROI_KEYPOINTS_HEAD = ''
+
 # Number of keypoints in the dataset (e.g., 17 for COCO)
 __C.KRCNN.NUM_KEYPOINTS = -1
 
@@ -382,6 +434,27 @@ __C.KRCNN.NUM_STACKED_CONVS = 8
 
 # Output size (and size loss is computed on), e.g., 56x56
 __C.KRCNN.HEATMAP_SIZE = -1
+
+
+# ---------------------------------------------------------------------------- #
+# ResNets options ("ResNets" = ResNet and ResNeXt)
+# ---------------------------------------------------------------------------- #
+__C.RESNETS = edict()
+
+# Place the stride 2 conv on the 1x1 filter
+# Use True only for the original MSRA ResNet; use False for C2 and Torch models
+__C.RESNETS.STRIDE_1X1 = True
+
+# Apply dilation in stage "res5"
+__C.RESNETS.RES5_DILATION = 1
+
+# Freeze model weights before and including which block.
+# Choices: [0, 2, 3, 4, 5]. O means not fixed. First conv and bn are defaults to
+# be fixed.
+__C.RESNETS.FREEZE_AT = 2
+
+# Whether to load pretrained weight from ImageNet
+__C.RESNETS.PRETRAINED = True
 
 
 import pdb

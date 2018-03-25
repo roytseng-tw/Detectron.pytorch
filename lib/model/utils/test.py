@@ -35,6 +35,7 @@ import cv2
 import numpy as np
 import pycocotools.mask as mask_util
 import torch
+from torch.autograd import Variable
 
 from model.rpn.bbox_transform import bbox_transform_inv, clip_boxes
 from model.nms.nms_wrapper import nms
@@ -43,12 +44,17 @@ from model.utils.timer import Timer
 import model.utils.boxes as box_utils
 
 
-def im_test_all(
-  args, im_info, rois, rois_label, cls_prob, bbox_pred, mask_pred=None, pose_pred=None,
-  timers=None):
+def im_detect_all(model, im_data, im_info, gt_boxes, num_boxes,
+                  args, timers=None):
   """Process the outputs of model for testing
-  args: arguments from command line.
-  timer: record the cost of time for different steps
+  Args:
+    model: the network module
+    im_data: Pytorch variable. Input batch to the model.
+    im_info: Pytorch variable. Input batch to the model.
+    gt_boxes: Pytorch variable. Input batch to the model.
+    num_boxes: Pytorch variable. Input batch to the model.
+    args: arguments from command line. 
+    timer: record the cost of time for different steps
   The rest of inputs are of type pytorch Variables and either input to or output from the model.
   """
 
@@ -57,24 +63,38 @@ def im_test_all(
   if timers is None:
     timers = defaultdict(Timer)
 
-  scores, boxes = im_test_bbox(im_info, rois, cls_prob, bbox_pred, args)
+  timers['im_detect_bbox'].tic()
+  scores, boxes, blob_conv = im_detect_bbox(model, im_data, im_info, gt_boxes, num_boxes, args)
+  timers['im_detect_bbox'].toc()
+
   scores = scores.view(-1, scores.size(-1))
   boxes = boxes.view(-1, boxes.size(-1))
 
   # score and boxes are from the whole image after score thresholding and nms
-  # (they are not separated by class)
+  # (they are not separated by class) (numpy.ndarray)
   # cls_boxes boxes and scores are separated by class and in the format used
   # for evaluating results
   timers['misc_bbox'].tic()
   scores, boxes, cls_boxes = box_results_with_nms_and_limit(scores, boxes, args)
   timers['misc_bbox'].toc()
 
-  [[im_h, im_w, im_scale]] = im_info.data.cpu().numpy()
+  # Convert `boxes` to `rois` in pytorch Tenso
+  # 1. prepend a batch id
+  rois = np.concatenate((np.zeros((boxes.shape[0], 1)), boxes), axis=1)
+  rois = Variable(torch.Tensor(rois.astype('float32')))
+  if im_info.is_cuda:
+    device = im_info.get_device()
+    rois = rois.cuda(device)
+  else:
+    device = None
+  im_scales = im_info[:, 2]
+
+  im_h, im_w = im_info.data.cpu().numpy()[0, :2]
   im_h, im_w = im_h.astype(int), im_w.astype(int)
-  if mask_pred is not None:
-    mask_pred = mask_pred.data.cpu().numpy()
+
+  if cfg.MODEL.MASK_ON:
     timers['im_detect_mask'].tic()
-    masks = im_test_mask(mask_pred)
+    masks = im_detect_mask(model, im_scales, rois, blob_conv)
     timers['im_detect_mask'].toc()
     timers['misc_mask'].tic()
     cls_segms = segm_results(cls_boxes, masks, boxes, im_h, im_w)
@@ -82,7 +102,7 @@ def im_test_all(
   else:
     cls_segms = None
 
-  if pose_pred is not None:
+  if cfg.MODEL.KEYPOINTS_ON:
     pass
   else:
     cls_keyps = None
@@ -90,10 +110,16 @@ def im_test_all(
   return cls_boxes, cls_segms, cls_keyps
 
 
-def im_test_bbox(im_info, rois, cls_prob, bbox_pred, args):
+def im_detect_bbox(model, im_data, im_info, gt_boxes, num_boxes, args):  # NOTE: support multi-batch
   """Prepare the bbox for testing
   """
-  scores = cls_prob.data
+  return_dict = model(im_data, im_info, gt_boxes, num_boxes)
+
+  rois = return_dict['rois']
+  cls_score = return_dict['cls_score']
+  bbox_pred = return_dict['bbox_pred']
+
+  scores = cls_score.data
   boxes = rois.data[:, :, 1:5]
   num_classes = scores.size(-1)
 
@@ -114,15 +140,17 @@ def im_test_bbox(im_info, rois, cls_prob, bbox_pred, args):
     pred_boxes = clip_boxes(pred_boxes, im_info.data, BATCH_SIZE)
   else:
     # Simply repeat the boxes, once for each class
-    pred_boxes = np.tile(boxes, (1, scores.shape[1]))  #FIXME: convert to torch.Tensor
+    pred_boxes = torch.from_numpy(np.tile(boxes, (1, scores.shape[1])))
 
   # unscale back to raw image space
-  pred_boxes /= im_info.data[:, 2].view(-1, 1, 1).expand(1, pred_boxes.size(1), 1)
+  # im_scales = im_info.data[:, 2].view(-1, 1, 1).expand(1, pred_boxes.size(1), 1).contiguous()
+  im_scales = im_info.data[:, 2]
+  pred_boxes /= im_scales
 
-  return scores, pred_boxes
+  return scores, pred_boxes, return_dict['blob_conv']
 
 
-def box_results_with_nms_and_limit(scores, boxes, args):
+def box_results_with_nms_and_limit(scores, boxes, args):  # NOTE: support single-batch
   """Returns bounding-box detection results by thresholding on scores and
   applying non-maximum suppression (NMS).
 
@@ -173,7 +201,7 @@ def box_results_with_nms_and_limit(scores, boxes, args):
   return scores, boxes, cls_boxes
 
 
-def im_test_mask(mask_pred):
+def im_detect_mask(model, im_scales, rois, blob_conv):
   """Prepare the mask for testing
   Returns:
       pred_masks (ndarray): R x K x M x M array of class specific soft masks
@@ -181,18 +209,17 @@ def im_test_mask(mask_pred):
           into hard masks in the original image coordinate space)
   """
   M = cfg.MRCNN.RESOLUTION
+  if rois.size(0) == 0:
+    pred_masks = torch.zeros((0, M, M))
+    return pred_masks
+
+  mask_rois = rois * im_scales
+  mask_pred = model.mask_net(mask_rois, blob_conv)
 
   if cfg.MRCNN.CLS_SPECIFIC_MASK:
-    pred_masks = mask_pred.reshape([-1, cfg.MODEL.NUM_CLASSES, M, M])
+    pred_masks = mask_pred.data.view([-1, cfg.MODEL.NUM_CLASSES, M, M])
   else:
-    pred_masks = mask_pred.reshape([-1, 1, M, M])
-
-  # # truncate padded masks ??
-  # print(pred_masks.shape)
-  # nonzeros = np.any(pred_masks, axis=(1,2,3))
-  # print(nonzeros.shape)
-  # print(np.count_nonzero(nonzeros))
-  # exit()
+    pred_masks = mask_pred.data.view([-1, 1, M, M])
 
   return pred_masks
 

@@ -24,6 +24,7 @@ import torch.nn as nn
 from torch.autograd import Variable
 
 import _init_paths
+from modeling.model_builder import Generalized_RCNN
 import datasets
 from roi_data_layer.roidb import combined_roidb
 from model.rpn.bbox_transform import bbox_transform_inv, clip_boxes
@@ -35,9 +36,7 @@ import model.utils.misc as misc_utils
 import model.utils.test as test_utils
 import model.utils.vis as vis_utils
 from model.utils.timer import Timer
-
-from model.mask_rcnn.resnet import resnet
-import detectron_weights_loader as dwl
+from utils.detectron_weight_helper import load_detectron_weight
 
 
 def parse_args():
@@ -154,8 +153,6 @@ if __name__ == '__main__':
     cfg_from_list(args.set_cfgs)
 
   if args.load_detectron:
-    cfg.POOLING_SIZE = 14
-    cfg.MRCNN.RESOLUTION = 28
     cfg.TEST.RPN_PRE_NMS_TOP_N = 6000
     cfg.TEST.RPN_POST_NMS_TOP_N = 1000
     cfg.TEST.MAX_SIZE = 1333
@@ -172,18 +169,7 @@ if __name__ == '__main__':
   # np.random.seed(cfg.RNG_SEED)
   imdb.competition_mode(on=True)
 
-  # initilize the network here.
-  # pretrained = True if args.load_detectron else False  # True is for the bn weights
-  if args.net == 'res50':
-    maskRCNN = resnet(imdb.classes, 50, pretrained=False, class_agnostic=args.class_agnostic)
-  elif args.net == 'res101':
-    maskRCNN = resnet(imdb.classes, 101, pretrained=False, class_agnostic=args.class_agnostic)
-  elif args.net == 'res152':
-    maskRCNN = resnet(imdb.classes, 152, pretrained=False, class_agnostic=args.class_agnostic)
-  else:
-    sys.exit("network is not defined")
-
-  maskRCNN.create_architecture()
+  maskRCNN = Generalized_RCNN()
 
   if args.load_ckpt:
     load_name = args.load_ckpt
@@ -196,7 +182,7 @@ if __name__ == '__main__':
   if args.load_detectron:
     print("loading detectron weights %s" % args.load_detectron)
     if args.net == 'res50':
-      dwl.load_detectron_weight(maskRCNN, args.load_detectron, dwl.mask_rcnn_R50_C4)
+      load_detectron_weight(maskRCNN, args.load_detectron)
     else:
       raise NotImplementedError
 
@@ -233,26 +219,18 @@ if __name__ == '__main__':
     im_info = Variable(torch.from_numpy(im_info), volatile=True)
     gt_boxes = Variable(torch.zeros(1, 1, 5), volatile=True)
     num_boxes = Variable(torch.zeros(1), volatile=True)
-    gt_masks = Variable(torch.zeros(1), volatile=True)
 
     if args.cuda:
       im_data = im_data.cuda()
       im_info = im_info.cuda()
       gt_boxes = gt_boxes.cuda()
       num_boxes = num_boxes.cuda()
-      gt_masks = gt_masks.cuda()
 
     timers = defaultdict(Timer)
 
-    rois, rois_label, cls_prob, bbox_pred, mask_pred, \
-      rpn_loss_cls, rpn_loss_box, \
-      RCNN_loss_cls, RCNN_loss_bbox, \
-      loss_mask \
-      = maskRCNN(im_data, im_info, gt_boxes, num_boxes, gt_masks)
-
-    cls_boxes, cls_segms, cls_keyps = test_utils.im_test_all(
-      args, im_info, rois, rois_label, cls_prob, bbox_pred,
-      mask_pred, timers=timers)
+    cls_boxes, cls_segms, cls_keyps = test_utils.im_detect_all(
+      maskRCNN, im_data, im_info, gt_boxes, num_boxes,
+      args, timers=timers)
 
     imname, _ = os.path.splitext(imglist[i])
     vis_utils.vis_one_image(
