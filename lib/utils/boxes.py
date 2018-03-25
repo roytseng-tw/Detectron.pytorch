@@ -47,7 +47,7 @@ from __future__ import unicode_literals
 
 import numpy as np
 
-from model.utils.config import cfg
+from core.config import cfg
 # import utils.cython_bbox as cython_bbox
 # import utils.cython_nms as cython_nms
 

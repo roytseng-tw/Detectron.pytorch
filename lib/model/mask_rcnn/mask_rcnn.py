@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
 
-from model.utils.config import cfg
+from core.config import cfg
 from model.rpn.rpn import _RPN
 from model.roi_pooling.modules.roi_pool import _RoIPooling
 from model.roi_crop.modules.roi_crop import _RoICrop
@@ -54,7 +54,7 @@ class _maskRCNN(nn.Module):
 
         # rois: (n, x1, y1, x2, y2) specifying an image batch index n and a rectangle (x1, y1, x2, y2). rectangles will in the image.
 
-        # if it is training phrase, then use ground trubut bboxes for refining
+        # if it is training phrase, then use ground truth bboxes for refining
         if self.training:
             if cfg.HAS_POSE_BRANCH:
                 roi_data = self.RCNN_proposal_target(rois, gt_boxes, num_boxes, gt_masks, gt_poses)
@@ -112,7 +112,7 @@ class _maskRCNN(nn.Module):
             pose_pred = self.pose_outputs(pose_feat)
 
         # feed pooled features to top model (detection model)
-        detect_feat = self._head_to_tail(pooled_feat)  # 256 * 2048 for res101
+        detect_feat = self._head_to_tail(pooled_feat)  # n_rois * 2048 for res101
 
         # compute bbox offset
         bbox_pred = self.RCNN_bbox_pred(detect_feat)

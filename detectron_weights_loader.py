@@ -2,8 +2,7 @@ import _init_paths
 import pickle
 import torch
 
-from model.mask_rcnn.resnet import resnet
-from model.utils.config import cfg, cfg_from_list
+from core.config import cfg, cfg_from_list
 
 
 # ---------------------------------------------------------------------------- #
@@ -100,6 +99,7 @@ def load_detectron_weight(net, detectron_weight_file, map_func):
 
 
 if __name__ == '__main__':
+  from model.mask_rcnn.resnet import resnet
   set_cfgs = ['ANCHOR_SCALES', '[2, 4, 8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '50',
               'RPN.CLS_ACTIVATION', 'sigmoid', 'RPN.OUT_DIM_AS_IN_DIM', 'True']
   cfg_from_list(set_cfgs)

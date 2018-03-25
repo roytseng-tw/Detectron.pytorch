@@ -3,9 +3,9 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-import datasets
+import datasets.imdb
 import numpy as np
-from model.utils.config import cfg
+from core.config import cfg
 from datasets.factory import get_imdb
 import PIL
 import pdb

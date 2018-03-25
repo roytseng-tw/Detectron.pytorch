@@ -6,7 +6,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
 
-from model.utils.config import cfg
+from core.config import cfg
 from model.rpn.rpn import _RPN
 from model.rpn.proposal_target_layer_cascade_v2 import _ProposalTargetLayer
 from model.roi_pooling.modules.roi_pool import _RoIPooling

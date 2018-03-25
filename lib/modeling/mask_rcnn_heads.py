@@ -6,7 +6,7 @@ import torch.nn.functional as F
 import torch.nn.init as init
 from torch.autograd import Variable
 
-from model.utils.config import cfg
+from core.config import cfg
 from modeling import resnet
 
 

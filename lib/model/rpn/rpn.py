@@ -4,7 +4,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
 
-from model.utils.config import cfg
+from core.config import cfg
 from .proposal_layer import _ProposalLayer
 from .anchor_target_layer import _AnchorTargetLayer
 from model.utils.net_utils import _smooth_l1_loss

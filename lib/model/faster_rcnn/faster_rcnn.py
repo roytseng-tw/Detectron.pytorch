@@ -6,7 +6,7 @@ from torch.autograd import Variable
 import torchvision.models as models
 from torch.autograd import Variable
 import numpy as np
-from model.utils.config import cfg
+from core.config import cfg
 from model.rpn.rpn import _RPN
 from model.roi_pooling.modules.roi_pool import _RoIPooling
 from model.roi_crop.modules.roi_crop import _RoICrop

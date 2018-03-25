@@ -24,7 +24,7 @@ if __name__ == '__main__':
   import sys
   sys.path.insert(0, '..')
   from modeling.model_builder import Generalized_RCNN
-  from model.utils.config import cfg, cfg_from_file
+  from core.config import cfg, cfg_from_file
 
   cfg.MODEL.NUM_CLASSES = 81
   cfg_from_file('../../cfgs/res50_mask.yml')
@@ -39,4 +39,4 @@ if __name__ == '__main__':
     assert k in state_dict, '%s' % k
 
   rest = set(state_dict.keys()) - set(mapping.keys())
-  print('Number of rest:', len(rest))
+  assert len(rest) == 0

@@ -28,8 +28,8 @@ import numpy as np
 import os
 import pycocotools.mask as mask_util
 
-from model.utils.colormap import colormap
-import model.utils.keypoints as keypoint_utils
+from utils.colormap import colormap
+import utils.keypoints as keypoint_utils
 
 # Use a non-interactive backend
 import matplotlib

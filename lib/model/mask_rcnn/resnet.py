@@ -5,7 +5,7 @@ from __future__ import print_function
 import torch
 import torch.nn as nn
 
-from model.utils.config import cfg
+from core.config import cfg
 from model.mask_rcnn.mask_rcnn import _maskRCNN
 from model.faster_rcnn.resnet import resnet50, resnet101, resnet152  # NOQA
 

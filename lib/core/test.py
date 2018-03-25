@@ -34,14 +34,15 @@ from collections import defaultdict
 import cv2
 import numpy as np
 import pycocotools.mask as mask_util
-import torch
-from torch.autograd import Variable
 
+from torch.autograd import Variable
+import torch
+
+from core.config import cfg
 from model.rpn.bbox_transform import bbox_transform_inv, clip_boxes
 from model.nms.nms_wrapper import nms
-from model.utils.config import cfg
-from model.utils.timer import Timer
-import model.utils.boxes as box_utils
+from utils.timer import Timer
+import utils.boxes as box_utils
 
 
 def im_detect_all(model, im_data, im_info, gt_boxes, num_boxes,

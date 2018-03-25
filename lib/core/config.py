@@ -5,7 +5,6 @@ from __future__ import print_function
 import os
 import os.path as osp
 import numpy as np
-# `pip install easydict` if you don't have it
 from easydict import EasyDict as edict
 
 __C = edict()
@@ -257,7 +256,7 @@ __C.RNG_SEED = 3
 __C.EPS = 1e-14
 
 # Root directory of project
-__C.ROOT_DIR = osp.abspath(osp.join(osp.dirname(__file__), '..', '..', '..'))
+__C.ROOT_DIR = osp.abspath(osp.join(osp.dirname(__file__), '..', '..'))
 
 # Data directory
 __C.DATA_DIR = osp.abspath(osp.join(__C.ROOT_DIR, 'data'))
@@ -353,11 +352,18 @@ __C.RPN.OUT_DIM_AS_IN_DIM = True
 __C.RPN.OUT_DIM = 512
 
 # 'sigmoid' or 'softmax'. Detectron use 'sigmoid'. jwyang use 'softmax'
-# This value also affect the conv output dim for `RPN_cls_score`
+# This will affect the conv2d output dim for classifying the bg/fg rois
 __C.RPN.CLS_ACTIVATION = 'sigmoid'
 
-# Mask RCNN configuration
-__C.HAS_POSE_BRANCH = False
+# RPN anchor sizes given in absolute pixels w.r.t. the scaled network input
+# Note: these options are *not* used by FPN RPN; see FPN.RPN* options
+__C.RPN.SIZES = (64, 128, 256, 512)
+
+# Stride of the feature map that RPN is attached
+__C.RPN.STRIDE = 16
+
+# RPN anchor aspect ratios
+__C.RPN.ASPECT_RATIOS = (0.5, 1, 2)
 
 
 # ---------------------------------------------------------------------------- #

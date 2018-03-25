@@ -24,19 +24,18 @@ import torch.nn as nn
 from torch.autograd import Variable
 
 import _init_paths
+from core.config import cfg, cfg_from_file, cfg_from_list
+from core.test import im_detect_all
 from modeling.model_builder import Generalized_RCNN
-import datasets
-from roi_data_layer.roidb import combined_roidb
 from model.rpn.bbox_transform import bbox_transform_inv, clip_boxes
 from model.nms.nms_wrapper import nms
-from model.utils.config import cfg, cfg_from_file, cfg_from_list
+from utils.detectron_weight_helper import load_detectron_weight
+from utils.timer import Timer
+import datasets.coco_mask
 import model.utils.net_utils as net_utils
 import model.utils.blob as blob_utils
 import model.utils.misc as misc_utils
-import model.utils.test as test_utils
-import model.utils.vis as vis_utils
-from model.utils.timer import Timer
-from utils.detectron_weight_helper import load_detectron_weight
+import utils.vis as vis_utils
 
 
 def parse_args():
@@ -228,7 +227,7 @@ if __name__ == '__main__':
 
     timers = defaultdict(Timer)
 
-    cls_boxes, cls_segms, cls_keyps = test_utils.im_detect_all(
+    cls_boxes, cls_segms, cls_keyps = im_detect_all(
       maskRCNN, im_data, im_info, gt_boxes, num_boxes,
       args, timers=timers)
 

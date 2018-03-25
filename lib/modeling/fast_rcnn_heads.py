@@ -1,7 +1,7 @@
 import torch.nn as nn
 import torch.nn.functional as F
 
-from model.utils.config import cfg
+from core.config import cfg
 from model.utils.net_utils import _smooth_l1_loss
 
 

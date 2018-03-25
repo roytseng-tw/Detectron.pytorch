@@ -2,7 +2,7 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-from model.utils.config import cfg
+from core.config import cfg
 from model.faster_rcnn.faster_rcnn import _fasterRCNN
 
 import torch

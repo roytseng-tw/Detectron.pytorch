@@ -5,8 +5,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from model.utils.config import cfg
-from model.utils.resnet_weights_helper import convert_state_dict
+from core.config import cfg
+from utils.resnet_weights_helper import convert_state_dict
 
 # ---------------------------------------------------------------------------- #
 # Bits for specific architectures (ResNet50, ResNet101, ...)
@@ -68,6 +68,9 @@ class ResNet_ConvX_Body(nn.Module):
         stride = 2
       self.res5, dim_in = _make_layer(
         Bottleneck, dim_in, dim_bottleneck * 8, block_counts[3], stride, cfg.RESNETS.RES5_DILATION)
+      self.spatial_scale = 1 / 32 * cfg.RESNETS.RES5_DILATION
+    else:
+      self.spatial_scale = 1 / 16  # final feature scale wrt. original image scale
 
     self.dim_out = dim_in
 

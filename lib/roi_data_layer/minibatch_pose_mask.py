@@ -15,7 +15,7 @@ import numpy.random as npr
 import scipy.ndimage
 from scipy.misc import imread
 from pycocotools import mask as COCOmask
-from model.utils.config import cfg
+from core.config import cfg
 from model.utils.blob import prep_im_for_blob, im_list_to_blob
 
 

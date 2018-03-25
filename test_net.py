@@ -23,7 +23,7 @@ import torch.optim as optim
 import pickle
 from roi_data_layer.roidb import combined_roidb
 from roi_data_layer.roibatchLoader import roibatchLoader
-from model.utils.config import cfg, cfg_from_file, cfg_from_list, get_output_dir
+from core.config import cfg, cfg_from_file, cfg_from_list, get_output_dir
 from model.rpn.bbox_transform import clip_boxes
 from model.nms.nms_wrapper import nms
 from model.rpn.bbox_transform import bbox_transform_inv

@@ -9,7 +9,7 @@ from __future__ import print_function
 import torch.utils.data as data
 import torch
 
-from model.utils.config import cfg
+from core.config import cfg
 from roi_data_layer.minibatch_pose_mask import get_minibatch
 
 import numpy as np

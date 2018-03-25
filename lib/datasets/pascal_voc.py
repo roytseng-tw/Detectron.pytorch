@@ -27,7 +27,7 @@ from .voc_eval import voc_eval
 
 # TODO: make fast_rcnn irrelevant
 # >>>> obsolete, because it depends on sth outside of this project
-from model.utils.config import cfg
+from core.config import cfg
 
 try:
     xrange          # Python 2

@@ -15,7 +15,7 @@ from pycocotools.cocoeval import COCOeval
 
 from datasets.imdb import imdb
 import datasets.ds_utils as ds_utils
-from model.utils.config import cfg
+from core.config import cfg
 
 class coco_mask_pose(imdb):
   def __init__(self, image_set, year):
