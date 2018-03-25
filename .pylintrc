@@ -1,0 +1,2 @@
+[Master]
+init-hook='import _init_paths.py'
