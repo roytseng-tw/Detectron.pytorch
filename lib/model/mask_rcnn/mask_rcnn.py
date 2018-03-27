@@ -40,10 +40,11 @@ class _maskRCNN(nn.Module):
         im_info = im_info.data
         gt_boxes = gt_boxes.data
         num_boxes = num_boxes.data
-        # Emergency treatment: #TODO: better mechanism to pass in cpu tensors along with gpu tensors
-        gt_masks = gt_masks.data.cpu()
+
+        # gt_masks, gt_poses are on CPU
+        gt_masks = gt_masks.data
         if gt_poses is not None:
-            gt_poses = gt_poses.data.cpu()
+            gt_poses = gt_poses.data
 
         # feed image data to base model to obtain base feature map
         base_feat = self.RCNN_base(im_data)

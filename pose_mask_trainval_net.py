@@ -35,6 +35,8 @@ from model.utils.net_utils import weights_normal_init, save_net, load_net, \
 
 # from model.mask_rcnn.vgg16 import vgg16
 from model.mask_rcnn.resnet import resnet
+import nn as mynn
+
 
 def parse_args():
   """
@@ -204,7 +206,7 @@ if __name__ == '__main__':
 
   cfg.HAS_POSE_BRANCH = True
   cfg.POOLING_SIZE = 14
-  cfg.MRCNN.RESOLUTION = [28, 28]
+  cfg.MRCNN.RESOLUTION = 28
   cfg.KRCNN.HEATMAP_SIZE = 56  # ROI_XFORM_RESOLUTION (14) * UP_SCALE (2) * USE_DECONV_OUTPUT (2)
   cfg.TRAIN.BATCH_SIZE = 100
 
@@ -303,7 +305,7 @@ if __name__ == '__main__':
       cfg.POOLING_MODE = checkpoint['pooling_mode']
 
   if args.mGPUs:
-    maskRCNN = nn.DataParallel(maskRCNN)
+    maskRCNN = mynn.DataParallel(maskRCNN, cpu_keywords=['gt_masks', 'gt_poses'])
 
   if args.cuda:
     maskRCNN.cuda()
@@ -345,7 +347,8 @@ if __name__ == '__main__':
           rpn_loss_cls, rpn_loss_box, \
           RCNN_loss_cls, RCNN_loss_bbox, \
           loss_mask, loss_pose \
-          = maskRCNN(im_data, im_info, gt_boxes, num_boxes, gt_masks, gt_poses)
+          = maskRCNN(im_data, im_info, gt_boxes, num_boxes,
+                     gt_masks=gt_masks, gt_poses=gt_poses)
 
         loss = rpn_loss_cls.mean() + rpn_loss_box.mean() + RCNN_loss_cls.mean() + RCNN_loss_bbox.mean() \
           + loss_mask.mean() + loss_pose.mean()

@@ -39,6 +39,7 @@ from model.utils.net_utils import weights_normal_init, save_net, load_net, \
 from model.mask_rcnn.resnet import resnet
 
 import detectron_weights_loader as dwl
+import nn as mynn
 
 def parse_args():
   """
@@ -202,7 +203,7 @@ if __name__ == '__main__':
       args.imdbval_name = "coco-mask_2014_minival"
       args.set_cfgs = ['ANCHOR_SCALES', '[4, 8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '50']
   else:
-      sys.exit('Unexpect args.dataset value: ', args.dataset)
+      sys.exit('Unexpect args.dataset value: {}'.format(args.dataset))
   cfg.TRAIN.BATCH_SIZE = 120  # chance to OOM if 128 on 1080ti
 
   args.cfg_file = "cfgs/{}_mask_ls.yml".format(args.net) if args.large_scale else "cfgs/{}_mask.yml".format(args.net)
@@ -318,7 +319,7 @@ if __name__ == '__main__':
       raise NotImplementedError
 
   if args.mGPUs:
-    maskRCNN = nn.DataParallel(maskRCNN)
+    maskRCNN = mynn.DataParallel(maskRCNN, cpu_keywords=['gt_masks'])
 
   if args.cuda:
     maskRCNN.cuda()
@@ -358,7 +359,7 @@ if __name__ == '__main__':
           rpn_loss_cls, rpn_loss_box, \
           RCNN_loss_cls, RCNN_loss_bbox, \
           loss_mask \
-          = maskRCNN(im_data, im_info, gt_boxes, num_boxes, gt_masks)
+          = maskRCNN(im_data, im_info, gt_boxes, num_boxes, gt_masks=gt_masks)
 
         loss = rpn_loss_cls.mean() + rpn_loss_box.mean() + RCNN_loss_cls.mean() + RCNN_loss_bbox.mean() + loss_mask.mean()
         loss_temp += loss.data[0]

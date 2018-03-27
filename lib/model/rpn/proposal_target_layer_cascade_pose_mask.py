@@ -135,12 +135,11 @@ class _ProposalTargetLayer(nn.Module):
         rois_batch = all_rois.new(batch_size, rois_per_image, 5).zero_()
         gt_rois_batch = all_rois.new(batch_size, rois_per_image, 5).zero_()
 
-        gt_masks = gt_masks.cpu()
-        # move following tensor to gpu later. `gt_masks` should be a CPU tensor.
+        # `gt_masks` should be a CPU tensor
+        # move following tensor to gpu later. 
         gt_masks_batch = gt_masks.new(batch_size, rois_per_image, cfg.MRCNN.RESOLUTION, cfg.MRCNN.RESOLUTION).zero_()
         masks_weights = gt_masks.new(batch_size, rois_per_image).zero_()
 
-        gt_poses = gt_poses.cpu()
         # `gt_poses` should be a CPU float tensor. gt_poses.size(2) == num_keypoints
         gt_poses_keep = gt_poses.new(batch_size, rois_per_image, gt_poses.size(2), gt_poses.size(3)).zero_()
         # [_, _, n_kps]: contains the 1D-location (y * HEATMAP_SIZE + x) for each kp.
@@ -230,7 +229,8 @@ class _ProposalTargetLayer(nn.Module):
                         masks_weights[i, cnt] = 0
                     else:
                         # -- Mask --
-                        mask_re = sktf.resize(mask[y1:y2, x1:x2].numpy(), cfg.MRCNN.RESOLUTION, order=0).astype(np.float32)
+                        mask_re = sktf.resize(mask[y1:y2, x1:x2].numpy(),
+                            [cfg.MRCNN.RESOLUTION, cfg.MRCNN.RESOLUTION], order=0).astype(np.float32)
                         # print(mask_re.dtype, set(mask_re.reshape(-1).tolist())) --> {0.0, 1.0}
                         gt_masks_batch[i][cnt].copy_(torch.from_numpy(mask_re))
                         # -- Pose --

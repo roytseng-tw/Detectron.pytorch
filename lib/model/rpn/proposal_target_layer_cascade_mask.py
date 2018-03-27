@@ -221,7 +221,8 @@ class _ProposalTargetLayer(nn.Module):
                     if x1 == x2 or y1 == y2:  # box area == 0, mask cannot be resize
                         masks_weights[i, cnt] = 0
                     else:
-                        mask_re = sktf.resize(mask[y1:y2, x1:x2].numpy(), cfg.MRCNN.RESOLUTION, order=0).astype(np.float32)
+                        mask_re = sktf.resize(mask[y1:y2, x1:x2].numpy(),
+                            [cfg.MRCNN.RESOLUTION, cfg.MRCNN.RESOLUTION], order=0).astype(np.float32)
                         # print(mask_re.dtype, set(mask_re.reshape(-1).tolist()))
                         gt_masks_batch[i][cnt].copy_(torch.from_numpy(mask_re))
                     cnt += 1
