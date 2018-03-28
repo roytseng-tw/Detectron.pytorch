@@ -126,10 +126,22 @@ ext_modules = [
     #     extra_compile_args={
     #         'gcc': ['-Wno-cpp', '-Wno-unused-function', '-std=c99']},
     # ),
+    Extension(
+        name='utils.cython_bbox',
+        sources=['utils/cython_bbox.pyx'],
+        extra_compile_args={'gcc': ['-Wno-cpp']},
+        include_dirs=[numpy_include]
+    ),
+    Extension(
+        name='utils.cython_nms',
+        sources=['utils/cython_nms.pyx'],
+        extra_compile_args={'gcc': ['-Wno-cpp']},
+        include_dirs=[numpy_include]
+    )
 ]
 
 setup(
-    name='faster_rcnn',
+    name='mask_rcnn',
     ext_modules=ext_modules,
     # inject our custom trigger
     cmdclass={'build_ext': custom_build_ext},
