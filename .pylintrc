@@ -1,2 +1,3 @@
-[Master]
-init-hook='import _init_paths.py'
+[MASTER]
+extension-pkg-whitelist=numpy,torch,cv2
+init-hook="import _init_paths"
