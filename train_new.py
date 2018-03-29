@@ -206,13 +206,15 @@ if __name__ == '__main__':
     # print('Using config:')
     # pprint.pprint(cfg)
 
+    assert len(cfg.TRAIN.SCALES) == 1, "Currently, only support single scale for data loading"
+
     timers = defaultdict(Timer)
 
     cfg.TRAIN.USE_FLIPPED = True
     cfg.USE_GPU_NMS = args.cuda
 
     timers['roidb'].tic()
-    roidb, ratio_list, ratio_index = combined_roidb_for_training(
+    roidb, ratio_list, ratio_index, im_sizes_list = combined_roidb_for_training(
         args.train_datasets, args.train_proposal_files)
     timers['roidb'].toc()
     train_size = len(roidb)
@@ -223,7 +225,7 @@ if __name__ == '__main__':
     # FIXME: manually set for now
     cfg.MODEL.NUM_CLASSES = 81
 
-    sampler = MinibatchSampler(ratio_list, ratio_index)
+    sampler = MinibatchSampler(ratio_list, ratio_index, im_sizes_list)
     dataset = RoiDataLoader(
         roidb,
         cfg.MODEL.NUM_CLASSES,

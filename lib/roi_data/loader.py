@@ -23,7 +23,7 @@ class RoiDataLoader(data.Dataset):
         self.DATA_SIZE = len(self._roidb)
 
     def __getitem__(self, index_tuple):
-        index, ratio = index_tuple
+        index, ratio, imsizes = index_tuple
         single_db = [self._roidb[index]]
         blobs = get_minibatch(single_db)
 
@@ -36,7 +36,7 @@ class RoiDataLoader(data.Dataset):
             self.crop_data(blobs, ratio)
 
         # Padding the image based on the ratio
-        self.pad_data(blobs, ratio)
+        self.pad_data(blobs, ratio, imsizes)
 
         # Check bounding box
         boxes = blobs['roidb'][0]['boxes']
@@ -112,25 +112,13 @@ class RoiDataLoader(data.Dataset):
             np.clip(boxes[:, 2], 0, size_crop - 1, out=boxes[:, 2])
             blobs['roidb'][0]['boxes'] = boxes
 
-    def pad_data(self, blobs, ratio):
+    def pad_data(self, blobs, ratio, imsizes):
         data_height, data_width = map(int, blobs['im_info'][:2])
-        if ratio < 1:
-            data_padded = np.zeros((
-                3, math.ceil(data_width / ratio), data_width), dtype=np.float32)
-            data_padded[:, :data_height, :] = blobs['data']
-            blobs['data'] = data_padded
-            blobs['im_info'][0] = data_padded.shape[1]
-        elif ratio > 1:
-            data_padded = np.zeros((
-                3, data_height, math.ceil(data_height * ratio)), dtype=np.float32)
-            data_padded[:, :, :data_width] = blobs['data']
-            blobs['data'] = data_padded
-            blobs['im_info'][1] = data_padded.shape[2]
-        else:  # ratio == 1. Instead of padding, actually crop to the length of smaller side
-            trim_size = min(data_height, data_width)
-            blobs['data'] = blobs['data'][:, :trim_size, :trim_size]
-            np.clip(blobs['roidb'][0]['boxes'], 0, trim_size - 1, out=blobs['roidb'][0]['boxes'])
-            blobs['im_info'][:2] = [trim_size, trim_size]
+        target_height, target_width = map(int, imsizes[0])
+        data_padded = np.zeros((3, target_height, target_width), dtype=np.float32)
+        data_padded[:, :data_height, :data_width] = blobs['data']
+        blobs['data'] = data_padded
+        blobs['im_info'][:2] = data_padded.shape[1:]
 
     def __len__(self):
         return self.DATA_SIZE
@@ -164,16 +152,39 @@ def cal_minibatch_ratio(ratio_list):
     return ratio_list_minibatch
 
 
+def cal_minibatch_imsizes(im_sizes_list):
+    """Given the ratio_list, we want to make the SIZE same for each minibatch on each GPU.
+    This should work for considering cfg.TRAIN.MAX_SIZE and multiple cfg.TRAIN.SCALES (#TODO maybe).
+    """
+    DATA_SIZE = len(im_sizes_list)
+    imsizes_list_minibatch = np.empty((DATA_SIZE, len(cfg.TRAIN.SCALES), 2))
+    num_minibatch = int(np.ceil(DATA_SIZE / cfg.TRAIN.IMS_PER_BATCH))  # Include leftovers
+    for i in range(num_minibatch):
+        left_idx = i * cfg.TRAIN.IMS_PER_BATCH
+        right_idx = min((i+1) * cfg.TRAIN.IMS_PER_BATCH - 1, DATA_SIZE - 1)
+
+        imsizes = im_sizes_list[left_idx:(right_idx+1)]
+
+        # following logic is designed for single cfg.TRAIN.SCALES
+        # for multi scales we should probably grouping images with similar scales as well as ratio
+        imsizes_list_minibatch[left_idx:(right_idx+1)] = np.max(imsizes.reshape(-1, 2), axis=0)
+
+    return imsizes_list_minibatch
+
+
+
 class MinibatchSampler(sampler.Sampler):
-    def __init__(self, ratio_list, ratio_index):
+    def __init__(self, ratio_list, ratio_index, im_sizes_list):
         self.ratio_list = ratio_list
         self.ratio_index = ratio_index
+        self.im_sizes_list = im_sizes_list
         self.num_data = len(ratio_list)
 
         if cfg.TRAIN.ASPECT_GROUPING:
             # Given the ratio_list, we want to make the ratio same
             # for each minibatch on each GPU.
             self.ratio_list_minibatch = cal_minibatch_ratio(ratio_list)
+            self.imsizes_list_minibatch = cal_minibatch_imsizes(im_sizes_list)
 
     def __iter__(self):
         if cfg.TRAIN.ASPECT_GROUPING:
@@ -186,14 +197,18 @@ class MinibatchSampler(sampler.Sampler):
                 indices = np.append(indices, np.arange(round_num_data, round_num_data + rem))
             ratio_index = self.ratio_index[indices]
             ratio_list_minibatch = self.ratio_list_minibatch[indices]
+            imsizes_list_minibatch = self.imsizes_list_minibatch[indices]
         else:
             rand_perm = npr.permutation(self.num_data)
             ratio_list = self.ratio_list[rand_perm]
             ratio_index = self.ratio_index[rand_perm]
+            im_sizes_list = self.im_sizes_list[rand_perm]
             # re-calculate minibatch ratio list
             ratio_list_minibatch = cal_minibatch_ratio(ratio_list)
+            imsizes_list_minibatch = cal_minibatch_imsizes(im_sizes_list)
 
-        return iter(zip(ratio_index.tolist(), ratio_list_minibatch.tolist()))
+        return iter(zip(ratio_index.tolist(), ratio_list_minibatch.tolist(),
+                        imsizes_list_minibatch.tolist()))
 
     def __len__(self):
         return self.num_data

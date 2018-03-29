@@ -73,15 +73,30 @@ def prep_im_for_blob(im, pixel_means, target_sizes, max_size):
     ims = []
     im_scales = []
     for target_size in target_sizes:
-        im_scale = float(target_size) / float(im_size_min)
-        # # Prevent the biggest axis from being more than max_size
-        # if np.round(im_scale * im_size_max) > max_size:
-        #     im_scale = float(max_size) / float(im_size_max)
+        im_scale = get_target_scale(im_size_min, im_size_max, target_size, max_size)
         im_resized = cv2.resize(im, None, None, fx=im_scale, fy=im_scale,
                                 interpolation=cv2.INTER_LINEAR)
         ims.append(im_resized)
         im_scales.append(im_scale)
     return ims, im_scales
+
+
+def get_im_blob_sizes(im_shape, target_sizes, max_size):
+    im_size_min = np.min(im_shape)
+    im_size_max = np.max(im_shape)
+    im_sizes = []
+    for target_size in target_sizes:
+        im_scale = get_target_scale(im_size_min, im_size_max, target_size, max_size)
+        im_sizes.append(np.round(im_shape * im_scale))
+    return np.array(im_sizes)
+
+
+def get_target_scale(im_size_min, im_size_max, target_size, max_size):
+    im_scale = float(target_size) / float(im_size_min)
+    # Prevent the biggest axis from being more than max_size
+    if np.round(im_scale * im_size_max) > max_size:
+        im_scale = float(max_size) / float(im_size_max)
+    return im_scale
 
 
 def zeros(shape, int32=False):
