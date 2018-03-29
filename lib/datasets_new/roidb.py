@@ -154,6 +154,8 @@ def rank_for_training(roidb):
     RATIO_HI = 2  # largest ratio to preserve.
     RATIO_LO = 0.5  # smallest ratio to preserve.
 
+    need_crop_cnt = 0
+
     ratio_list = []
     for entry in roidb:
         width = entry['width']
@@ -164,9 +166,11 @@ def rank_for_training(roidb):
             if ratio > RATIO_HI:
                 entry['need_crop'] = True
                 ratio = RATIO_HI
+                need_crop_cnt += 1
             elif ratio < RATIO_LO:
                 entry['need_crop'] = True
                 ratio = RATIO_LO
+                need_crop_cnt += 1
             else:
                 entry['need_crop'] = False
         else:
@@ -174,6 +178,9 @@ def rank_for_training(roidb):
 
         ratio_list.append(ratio)
 
+    if cfg.TRAIN.ASPECT_CROPPING:
+        logging.info('Number of entries that need to be cropped: %d. Ratio bound: [%.2f, %.2f]',
+                     need_crop_cnt, RATIO_LO, RATIO_HI)
     ratio_list = np.array(ratio_list)
     ratio_index = np.argsort(ratio_list)
     return ratio_list[ratio_index], ratio_index

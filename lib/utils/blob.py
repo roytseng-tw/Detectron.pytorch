@@ -74,9 +74,9 @@ def prep_im_for_blob(im, pixel_means, target_sizes, max_size):
     im_scales = []
     for target_size in target_sizes:
         im_scale = float(target_size) / float(im_size_min)
-        # Prevent the biggest axis from being more than max_size
-        if np.round(im_scale * im_size_max) > max_size:
-            im_scale = float(max_size) / float(im_size_max)
+        # # Prevent the biggest axis from being more than max_size
+        # if np.round(im_scale * im_size_max) > max_size:
+        #     im_scale = float(max_size) / float(im_size_max)
         im_resized = cv2.resize(im, None, None, fx=im_scale, fy=im_scale,
                                 interpolation=cv2.INTER_LINEAR)
         ims.append(im_resized)

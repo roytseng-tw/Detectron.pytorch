@@ -11,6 +11,7 @@ from collections import defaultdict
 import numpy as np
 import cv2
 cv2.setNumThreads(0)  # pytorch issue 1355: possible deadlock in dataloader
+import tqdm
 
 import torch
 from torch.autograd import Variable
@@ -234,7 +235,8 @@ if __name__ == '__main__':
         num_workers=args.num_workers,
         collate_fn=collate_minibatch)
     data_iter = iter(dataloader)
-    data = next(data_iter)
-
-    from IPython import embed
-    embed()
+    # data = next(data_iter)
+    for data in tqdm.tqdm(data_iter):
+        pass
+    # from IPython import embed
+    # embed()

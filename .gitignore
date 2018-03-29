@@ -2,9 +2,8 @@ data/*
 *.pyc
 *~
 
-lib/pycocotools*/*.so
-lib/model/*/src/*.o
-lib/model/*/_ext/*/*.so
+*.o
+*.so
 
 .ipynb_checkpoints
 notebooks/*.pkl

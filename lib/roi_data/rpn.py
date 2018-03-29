@@ -80,7 +80,8 @@ def add_rpn_blobs(blobs, im_scales, roidb):
         for k in valid_keys:
             if k in e:
                 minimal_roidb[i][k] = e[k]
-    blobs['roidb'] = blob_utils.serialize(minimal_roidb)
+    # blobs['roidb'] = blob_utils.serialize(minimal_roidb)
+    blobs['roidb'] = minimal_roidb
 
 
 def _get_rpn_blobs(im_height, im_width, foas, all_anchors, gt_boxes):
