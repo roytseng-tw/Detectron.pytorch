@@ -183,7 +183,7 @@ class MinibatchSampler(sampler.Sampler):
             indices = np.arange(round_num_data)
             npr.shuffle(indices.reshape(-1, cfg.TRAIN.IMS_PER_BATCH))  # inplace shuffle
             if rem != 0:
-                indices.append(np.arange(round_num_data, round_num_data + rem))
+                indices = np.append(indices, np.arange(round_num_data, round_num_data + rem))
             ratio_index = self.ratio_index[indices]
             ratio_list_minibatch = self.ratio_list_minibatch[indices]
         else:
