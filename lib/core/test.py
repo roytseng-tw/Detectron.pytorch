@@ -179,7 +179,9 @@ def box_results_with_nms_and_limit(scores, boxes, args):  # NOTE: support single
         else:
           boxes_j = boxes[inds][:, j * 4:(j + 1) * 4]
         dets_j = torch.cat((boxes_j, scores_j.unsqueeze(1)), 1)
-        keep = nms(dets_j, cfg.TEST.NMS).view(-1).long()
+        # keep = nms(dets_j, cfg.TEST.NMS).view(-1).long()  #FIXME
+        keep = box_utils.nms(dets_j.cpu().numpy(), cfg.TEST.NMS)
+        keep = torch.from_numpy(keep).long().cuda(dets_j.get_device())
         nms_dets = dets_j[keep]
         cls_boxes[j] = nms_dets.cpu().numpy()
       else:

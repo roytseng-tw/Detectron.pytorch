@@ -34,20 +34,26 @@ class RoiDataLoader(data.Dataset):
 
         if self._roidb[index]['need_crop']:
             self.crop_data(blobs, ratio)
+            # Check bounding box
+            entry = blobs['roidb'][0]
+            boxes = entry['boxes']
+            invalid = (boxes[:, 0] == boxes[:, 2]) | (boxes[:, 1] == boxes[:, 3])
+            valid_inds = np.nonzero(~ invalid)[0]
+            if len(valid_inds) < len(boxes):
+                for key in ['boxes', 'gt_classes', 'seg_areas', 'gt_overlaps', 'is_crowd',
+                            'box_to_gt_ind_map', 'gt_keypoints']:
+                    if key in entry:
+                        entry[key] = entry[key][valid_inds]
+                entry['segms'] = [entry['segms'][ind] for ind in valid_inds]
 
         # Padding the image based on the ratio
         self.pad_data(blobs, ratio, imsizes)
 
-        # Check bounding box
-        boxes = blobs['roidb'][0]['boxes']
-        valid_inds = np.nonzero((boxes[:, 0] == boxes[:, 2]) | (boxes[:, 1] == boxes[:, 3]))[0]
-        blobs['roidb'][0]['boxes'] = boxes[valid_inds]
+        blobs['roidb'] = blob_utils.serialize(blobs['roidb'])  # CHECK: maybe we should serialize in collate_fn
 
-        blobs['roidb'] = blob_utils.serialize(blobs['roidb'])
-
-        for key, v in blobs.items():
-            if key != 'roidb':
-                print(key, v.shape)
+        # for key, v in blobs.items():
+        #     if key != 'roidb':
+        #         print(key, v.shape)
 
         return blobs
 
@@ -172,7 +178,6 @@ def cal_minibatch_imsizes(im_sizes_list):
     return imsizes_list_minibatch
 
 
-
 class MinibatchSampler(sampler.Sampler):
     def __init__(self, ratio_list, ratio_index, im_sizes_list):
         self.ratio_list = ratio_list
@@ -219,12 +224,15 @@ def collate_minibatch(list_of_blobs):
     A batch contains NUM_GPUS minibatches and image size in different minibatch may be different.
     Hence, we need to stack smaples from each minibatch seperately.
     """
+    Batch = {key: [] for key in list_of_blobs[0]}
+    # Because roidb consists of entries of variable length, it can't be batch into a tensor.
+    # So we keep roidb in the type of "list of ndarray".
     list_of_roidb = [blobs.pop('roidb') for blobs in list_of_blobs]
-    list_of_minibatch = []
     for i in range(0, len(list_of_blobs), cfg.TRAIN.IMS_PER_BATCH):
         mini_list = list_of_blobs[i:(i + cfg.TRAIN.IMS_PER_BATCH)]
         minibatch = default_collate(mini_list)
         minibatch['roidb'] = list_of_roidb[i:(i + cfg.TRAIN.IMS_PER_BATCH)]
-        list_of_minibatch.append(minibatch)
+        for key in minibatch:
+            Batch[key].append(minibatch[key])
 
-    return list_of_minibatch
+    return Batch

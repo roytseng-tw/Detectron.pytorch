@@ -20,23 +20,23 @@ class _RPN(nn.Module):
         super(_RPN, self).__init__()
 
         self.din = din  # get depth of input feature map, e.g., 512
-        self.dout = din if cfg.RPN.OUT_DIM_AS_IN_DIM else 512
+        self.dim_out = din if cfg.RPN.OUT_DIM_AS_IN_DIM else 512
         self.anchor_scales = cfg.ANCHOR_SCALES
         self.anchor_ratios = cfg.ANCHOR_RATIOS
         self.feat_stride = cfg.FEAT_STRIDE[0]
 
         # define the convrelu layers processing input feature map
-        self.RPN_Conv = nn.Conv2d(self.din, self.dout, 3, 1, 1, bias=True)
+        self.RPN_Conv = nn.Conv2d(self.din, self.dim_out, 3, 1, 1, bias=True)
 
         # define bg/fg classifcation score layer
         self.nc_score_out = len(self.anchor_scales) * len(self.anchor_ratios)
         if cfg.RPN.CLS_ACTIVATION == 'softmax':
             self.nc_score_out *= 2 # 2(bg/fg) * 9 (anchors)
-        self.RPN_cls_score = nn.Conv2d(self.dout, self.nc_score_out, 1, 1, 0)
+        self.RPN_cls_score = nn.Conv2d(self.dim_out, self.nc_score_out, 1, 1, 0)
 
         # define anchor box offset prediction layer
         self.nc_bbox_out = len(self.anchor_scales) * len(self.anchor_ratios) * 4 # 4(coords) * 9 (anchors)
-        self.RPN_bbox_pred = nn.Conv2d(self.dout, self.nc_bbox_out, 1, 1, 0)
+        self.RPN_bbox_pred = nn.Conv2d(self.dim_out, self.nc_bbox_out, 1, 1, 0)
 
         # define proposal layer
         self.RPN_proposal = _ProposalLayer(self.feat_stride, self.anchor_scales, self.anchor_ratios)

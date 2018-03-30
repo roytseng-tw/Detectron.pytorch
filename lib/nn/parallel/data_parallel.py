@@ -48,7 +48,8 @@ class DataParallel(Module):
 
     # TODO: update notes/cuda.rst when this class handles 8+ GPUs well
 
-    def __init__(self, module, device_ids=None, output_device=None, dim=0, cpu_keywords=[]):
+    def __init__(self, module, device_ids=None, output_device=None, dim=0, 
+                 cpu_keywords=[], minibatch=False, batch_outputs=True):
         super(DataParallel, self).__init__()
 
         if not torch.cuda.is_available():
@@ -67,33 +68,64 @@ class DataParallel(Module):
         if len(self.device_ids) == 1:
             self.module.cuda(device_ids[0])
         self.cpu_keywords = cpu_keywords
+        self.minibatch = minibatch
+        self.batch_outputs = batch_outputs
 
     def forward(self, *inputs, **kwargs):
         if not self.device_ids:
             return self.module(*inputs, **kwargs)
-        kwargs_cpu = {}
-        for k in kwargs:
-            if k in self.cpu_keywords:
-                v = kwargs[k]
-                assert not v.is_cuda
-                kwargs_cpu[k] = v
-        for k in self.cpu_keywords:
-            kwargs.pop(k, None)
-        inputs, kwargs = self.scatter(inputs, kwargs, self.device_ids)
-        # Split cpu Variables
-        for k, v in kwargs_cpu.items():
-            split_size = v.size(self.dim) / len(self.device_ids)
-            assert split_size.is_integer()
-            kwargs_cpu[k] = list(map(Variable, torch.split(v.data, int(split_size), self.dim)))
-        kwargs_cpu = list(map(dict, zip(*[[(k, v) for v in vs] for k, vs in kwargs_cpu.items()]))) # a list of dict
-        # Merge cpu kwargs with gpu kwargs
-        for d_gpu, d_cpu in zip(kwargs, kwargs_cpu):
-            d_gpu.update(d_cpu)
+
+        if self.minibatch:
+            inputs_list, kwargs_list = [], []
+            for i, device_id in enumerate(self.device_ids):
+                mini_inputs = [x[i] for x in inputs]
+                mini_kwargs = dict([(k, v[i]) for k, v in kwargs.items()])
+                a, b = self._minibatch_scatter(device_id, *mini_inputs, **mini_kwargs)
+                inputs_list.append(a)
+                kwargs_list.append(b)
+            inputs = inputs_list
+            kwargs = kwargs_list
+        else:
+            kwargs_cpu = {}
+            for k in kwargs:
+                if k in self.cpu_keywords:
+                    v = kwargs[k]
+                    kwargs_cpu[k] = v
+            for k in self.cpu_keywords:
+                kwargs.pop(k, None)
+            inputs, kwargs = self.scatter(inputs, kwargs, self.device_ids)
+            # Split cpu Variables
+            for k, v in kwargs_cpu.items():
+                split_size = v.size(self.dim) / len(self.device_ids)
+                assert split_size.is_integer()
+                kwargs_cpu[k] = list(map(Variable, torch.split(v.data, int(split_size), self.dim)))
+            kwargs_cpu = list(map(dict, zip(*[[(k, v) for v in vs] for k, vs in kwargs_cpu.items()]))) # a list of dict
+            # Merge cpu kwargs with gpu kwargs
+            for d_gpu, d_cpu in zip(kwargs, kwargs_cpu):
+                d_gpu.update(d_cpu)
+
         if len(self.device_ids) == 1:
             return self.module(*inputs[0], **kwargs[0])
         replicas = self.replicate(self.module, self.device_ids[:len(inputs)])
         outputs = self.parallel_apply(replicas, inputs, kwargs)
-        return self.gather(outputs, self.output_device)
+        if self.batch_outputs:
+            return self.gather(outputs, self.output_device)
+        else:
+            return [self.gather([x], self.output_device) for x in outputs]
+
+    def _minibatch_scatter(self, device_id, *inputs, **kwargs):
+        kwargs_cpu = {}
+        for k in kwargs:
+            if k in self.cpu_keywords:
+                kwargs_cpu[k] = kwargs[k]
+        for k in self.cpu_keywords:
+            kwargs.pop(k, None)
+        inputs, kwargs = self.scatter(inputs, kwargs, [device_id])
+        kwargs_cpu = [kwargs_cpu] # a list of dict
+        # Merge cpu kwargs with gpu kwargs
+        for d_gpu, d_cpu in zip(kwargs, kwargs_cpu):
+            d_gpu.update(d_cpu)
+        return inputs[0], kwargs[0]
 
     def replicate(self, module, device_ids):
         return replicate(module, device_ids)

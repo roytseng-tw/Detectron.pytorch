@@ -19,12 +19,6 @@ notebooks/*.pkl
 !.vscode/launch.json
 !.vscode/extensions.json
 
-.vscode/*
-!.vscode/settings.json
-!.vscode/tasks.json
-!.vscode/launch.json
-!.vscode/extensions.json
-
 # General
 .DS_Store
 .AppleDouble
@@ -32,7 +26,6 @@ notebooks/*.pkl
 
 # Icon must end with two \r
 Icon
-
 
 # Thumbnails
 ._*

@@ -127,7 +127,7 @@ __C.TRAIN.PROPOSAL_METHOD = 'gt'
 __C.TRAIN.ASPECT_GROUPING = True
 
 # Crop images that have too small or too large aspect ratio
-__C.TRAIN.ASPECT_CROPPING = True
+__C.TRAIN.ASPECT_CROPPING = False
 
 # Use RPN to detect objects
 __C.TRAIN.HAS_RPN = True
@@ -265,6 +265,11 @@ __C.NUM_GPUS = 1
 # for identifying duplicate boxes.
 # 1/16 is correct for {Alex,Caffe}Net, VGG_CNN_M_1024, and VGG16
 __C.DEDUP_BOXES = 1. / 16.
+
+# Clip bounding box transformation predictions to prevent np.exp from
+# overflowing
+# Heuristic choice based on that would scale a 16 pixel anchor up to 1000 pixels
+__C.BBOX_XFORM_CLIP = np.log(1000. / 16.)
 
 # Pixel mean values (BGR order) as a (1, 1, 3) array
 # We use the same pixel mean for all networks even though it's not exactly what

@@ -18,10 +18,15 @@ from torch.autograd import Variable
 import torch.nn as nn
 
 import _init_paths
+from core.config import cfg, cfg_from_file, cfg_from_list
 from datasets_new.roidb import combined_roidb_for_training
 from roi_data.loader import RoiDataLoader, MinibatchSampler, collate_minibatch
-from core.config import cfg, cfg_from_file, cfg_from_list
+from modeling.model_builder import Generalized_RCNN
+from utils.detectron_weight_helper import load_detectron_weight
 from utils.timer import Timer
+from model.utils.net_utils import clip_gradient, adjust_learning_rate
+from model.utils.misc import get_run_name
+import nn as mynn
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -171,8 +176,34 @@ def parse_args():
         help='whether use tensorflow tensorboard',
         action='store_true')
 
+    parser.add_argument(
+        '--no_save',
+        help='do not save anything',
+        action='store_true')
+
     args = parser.parse_args()
     return args
+
+
+def save(output_dir, args, epoch, step, model, optimizer, iters_per_epoch):
+    if args.no_save:
+        return
+    ckpt_dir = os.path.join(output_dir, 'ckpt')
+    if not os.path.exists(ckpt_dir):
+        os.makedirs(ckpt_dir)
+    save_name = os.path.join(ckpt_dir, 'mask_rcnn_{}_{}.pth'.format(epoch, step))
+    if args.mGPUs:
+        model = model.module
+    torch.save({
+        'epoch': epoch,
+        'step': step,
+        'iters_per_epoch': iters_per_epoch,
+        'model': model.state_dict(),
+        'optimizer': optimizer.state_dict(),
+        'pooling_mode': cfg.POOLING_MODE,
+        'class_agnostic': args.class_agnostic,
+    }, save_name)
+    print('save model: {}'.format(save_name))
 
 
 if __name__ == '__main__':
@@ -189,6 +220,14 @@ if __name__ == '__main__':
     cfg.TRAIN.IMS_PER_BATCH = args.batch_size // cfg.NUM_GPUS
     print('NUM_GPUs: %d, TRAIN.IMS_PER_BATCH: %d' % (cfg.NUM_GPUS, cfg.TRAIN.IMS_PER_BATCH))
 
+    if args.cuda or cfg.NUM_GPUS > 0:
+        cfg.CUDA = True
+    else:
+        raise ValueError("Need Cuda device to run !")
+
+    if cfg.NUM_GPUS > 1:
+        args.mGPUs = True
+
     if args.dataset == "coco2017":
         args.train_datasets = ('coco_2017_train', )
         args.train_proposal_files = ()
@@ -198,17 +237,23 @@ if __name__ == '__main__':
 
     if args.net == 'res50':
         args.cfg_file = "cfgs/res50_mask.yml"
+    else:
+        raise ValueError("No config file yet.")
 
     if args.cfg_file is not None:
         cfg_from_file(args.cfg_file)
     if args.set_cfgs is not None:
         cfg_from_list(args.set_cfgs)
+
     # print('Using config:')
     # pprint.pprint(cfg)
 
     assert len(cfg.TRAIN.SCALES) == 1, "Currently, only support single scale for data loading"
 
     timers = defaultdict(Timer)
+
+
+    ### Dataset ###
 
     cfg.TRAIN.USE_FLIPPED = True
     cfg.USE_GPU_NMS = args.cuda
@@ -237,8 +282,176 @@ if __name__ == '__main__':
         num_workers=args.num_workers,
         collate_fn=collate_minibatch)
     data_iter = iter(dataloader)
-    # data = next(data_iter)
-    for data in tqdm.tqdm(data_iter):
-        pass
-    # from IPython import embed
-    # embed()
+
+
+    ### Model ###
+
+    maskRCNN = Generalized_RCNN(train=True)
+
+    if args.load_ckpt:
+        load_name = args.load_ckpt
+        logging.info("loading checkpoint %s", load_name)
+        checkpoint = torch.load(load_name)
+        maskRCNN.load_state_dict(checkpoint['model'])
+        if 'pooling_mode' in checkpoint.keys():
+            assert cfg.POOLING_MODE == checkpoint['pooling_mode']
+
+    if args.load_detectron:
+        logging.info("loading Detectron weights %s", args.load_detectron)
+        load_detectron_weight(maskRCNN, args.load_detectron)
+
+        # mimic the Detectron affinechannel op
+        def set_bn_stats(m):
+            if isinstance(m, nn.BatchNorm2d):
+                nn.init.constant(m.running_mean, 0)
+                nn.init.constant(m.running_var, 1)
+        maskRCNN.apply(set_bn_stats)
+
+    if args.mGPUs:
+        maskRCNN = mynn.DataParallel(maskRCNN, cpu_keywords=['im_info', 'roidb'],
+                                     minibatch=True)
+
+    if cfg.CUDA:
+        maskRCNN.cuda()
+
+
+    ### Optimizer ###
+
+    lr = cfg.TRAIN.LEARNING_RATE
+    lr = args.lr
+
+    params = []
+    for key, value in dict(maskRCNN.named_parameters()).items():
+        if value.requires_grad:
+            if 'bias' in key:
+                params += [{'params': [value], 'lr': lr * (cfg.TRAIN.DOUBLE_BIAS + 1),
+                            'weight_decay': cfg.TRAIN.BIAS_DECAY and cfg.TRAIN.WEIGHT_DECAY or 0}]
+            else:
+                params += [{'params': [value], 'lr':lr, 'weight_decay': cfg.TRAIN.WEIGHT_DECAY}]
+
+    if args.optimizer == "adam":
+        optimizer = torch.optim.Adam(params)
+    elif args.optimizer == "sgd":
+        optimizer = torch.optim.SGD(params, momentum=cfg.TRAIN.MOMENTUM)
+
+
+    ### Training Setups ###
+
+    run_name = get_run_name()
+    output_dir = os.path.join(args.save_dir, args.net, args.dataset, run_name)
+
+    if not args.no_save:
+        if not os.path.exists(output_dir):
+            os.makedirs(output_dir)
+
+        if args.use_tfboard:
+            from tensorboardX import SummaryWriter
+            # Set the Tensorboard logger
+            tblogger = SummaryWriter(output_dir)
+
+
+    ### Training Loop ###
+
+    iters_per_epoch = int(train_size / args.batch_size)  # drop last
+    ckpt_interval_per_epoch = iters_per_epoch // args.ckpt_num_per_epoch
+    try:
+        for epoch in range(args.start_epoch, args.start_epoch + args.num_epochs):
+            maskRCNN.train()
+            loss_avg = 0
+            timers['train_loop'].tic()
+
+            for step, input_data in zip(range(iters_per_epoch), dataloader):
+
+                for key in input_data:
+                    if key != 'roidb':
+                        # roidb is list of ndarray not tensor,
+                        # because roidb consists of entries of variable length
+                        input_data[key] = list(map(Variable, input_data[key]))
+                        # if cfg.CUDA:
+                        #     input_data[key] = list(map(lambda x: x.cuda(), input_data[key]))
+
+                outputs = maskRCNN(**input_data)
+
+                rois_label = outputs['rois_label']
+                cls_score = outputs['cls_score']
+                bbox_pred = outputs['bbox_pred']
+                loss_rpn_cls = outputs['loss_rpn_cls'].mean()
+                loss_rpn_bbox = outputs['loss_rpn_bbox'].mean()
+                loss_rcnn_cls = outputs['loss_rcnn_cls'].mean()
+                loss_rcnn_bbox = outputs['loss_rcnn_bbox'].mean()
+
+                loss = loss_rpn_cls + loss_rpn_bbox + loss_rcnn_cls + loss_rcnn_bbox
+
+                if cfg.MODEL.MASK_ON:
+                    loss_rcnn_mask = outputs['loss_rcnn_mask'].mean()
+                    loss += loss_rcnn_mask
+
+                if cfg.MODEL.KEYPOINTS_ON:
+                    loss_rcnn_kps = outputs['loss_rcnn_kps'].mean()
+                    loss += loss_rcnn_kps
+
+                loss_avg += loss.data[0]
+
+                optimizer.zero_grad()
+                loss.backward()
+                if args.net == "vgg16":
+                    clip_gradient(maskRCNN, 10)
+                optimizer.step()
+
+                if (step+1) % ckpt_interval_per_epoch == 0:
+                    save(output_dir, args, epoch, step, maskRCNN, optimizer, iters_per_epoch)
+
+                if (step+1) % args.disp_interval == 0:
+                    diff = timers['train_loop'].toc(average=False)
+                    if step > 0:
+                        loss_avg /= args.disp_interval
+
+                    loss_rpn_cls = loss_rpn_cls.data[0]
+                    loss_rpn_bbox = loss_rpn_bbox.data[0]
+                    loss_rcnn_cls = loss_rcnn_cls.data[0]
+                    loss_rcnn_bbox = loss_rcnn_bbox.data[0]
+                    loss_rcnn_mask = loss_rcnn_mask.data[0]
+                    fg_cnt = torch.sum(rois_label.data.ne(0))
+                    bg_cnt = rois_label.data.numel() - fg_cnt
+
+                    print("[%s][session %d][epoch %2d][iter %4d / %4d]"
+                        % (run_name, args.session, epoch, step, iters_per_epoch))
+                    print("\t\tloss: %.4f, lr: %.2e" % (loss_avg, lr))
+                    print("\t\tfg/bg=(%d/%d), time cost: %f" % (fg_cnt, bg_cnt, diff))
+                    print("\t\trpn_cls: %.4f, rpn_bbox: %.4f, rcnn_cls: %.4f, rcnn_bbox %.4f, rcnn_mask %.4f"
+                        % (loss_rpn_cls, loss_rpn_bbox, loss_rcnn_cls, loss_rcnn_bbox, loss_rcnn_mask))
+                    if args.use_tfboard:
+                        info = {
+                            'loss': loss_avg,
+                            'loss_rpn_cls': loss_rpn_cls,
+                            'loss_rpn_box': loss_rpn_bbox,
+                            'loss_rcnn_cls': loss_rcnn_cls,
+                            'loss_rcnn_box': loss_rcnn_bbox,
+                            'loss_rcnn_mask': loss_rcnn_mask
+                        }
+                        for tag, value in info.items():
+                            tblogger.add_scalar(tag, value, iters_per_epoch * epoch + step)
+
+                    loss_avg = 0
+                    timers['train_loop'].tic()
+
+            # ---- End of epoch ----
+            # save checkpoint
+            save(output_dir, args, epoch, step, maskRCNN, optimizer, iters_per_epoch)
+            # adjust learning rate
+            if (epoch+1) % args.lr_decay_step == 0:
+                adjust_learning_rate(optimizer, args.lr_decay_gamma)
+                lr *= args.lr_decay_gamma
+            # reset timer
+            timers['train_loop'].reset()
+
+    except (RuntimeError, KeyboardInterrupt) as e:
+        print('Save on exception:', e)
+        save(output_dir, args, epoch, step, maskRCNN, optimizer, iters_per_epoch)
+        tb = traceback.format_exc()
+        print(tb)
+
+    finally:
+        # ---- Training ends ----
+        if args.use_tfboard:
+            tblogger.close()
