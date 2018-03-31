@@ -33,213 +33,262 @@ from utils.detectron_weight_helper import load_detectron_weight
 from utils.timer import Timer
 import datasets.coco_mask
 import model.utils.net_utils as net_utils
-import model.utils.blob as blob_utils
-import model.utils.misc as misc_utils
+import utils.blob as blob_utils
 import utils.vis as vis_utils
+import utils.misc as misc_utils
 
 
 def parse_args():
-  parser = argparse.ArgumentParser(description='Train a Fast R-CNN network')
-  parser.add_argument('--dataset', dest='dataset',
-                      help='training dataset',
-                      default='pascal_voc', type=str)
-  parser.add_argument('--net', dest='net',
-                      help='vgg16, res50, res101, res152',
-                      default='res101', type=str)
-  parser.add_argument('--ls', dest='large_scale',
-                      help='whether use large imag scale',
-                      action='store_true')
-  parser.add_argument('--cag', dest='class_agnostic',
-                      help='whether perform class_agnostic bbox regression',
-                      action='store_true')
-  parser.add_argument('--detectron_arch',
-                      help='Use architecture settings as in detectron',
-                      default=True, type=distutils.util.strtobool)
+    parser = argparse.ArgumentParser(description='Train a Fast R-CNN network')
+    parser.add_argument(
+        '--dataset',
+        dest='dataset',
+        help='training dataset',
+        default='pascal_voc',
+        type=str)
+    parser.add_argument(
+        '--net',
+        dest='net',
+        help='vgg16, res50, res101, res152',
+        default='res101',
+        type=str)
+    parser.add_argument(
+        '--ls',
+        dest='large_scale',
+        help='whether use large imag scale',
+        action='store_true')
+    parser.add_argument(
+        '--cag',
+        dest='class_agnostic',
+        help='whether perform class_agnostic bbox regression',
+        action='store_true')
+    parser.add_argument(
+        '--detectron_arch',
+        help='Use architecture settings as in detectron',
+        default=True,
+        type=distutils.util.strtobool)
 
-  parser.add_argument('--cfg', dest='cfg_file',
-                      help='optional config file',
-                      default='cfgs/vgg16.yml', type=str)
-  parser.add_argument('--set', dest='set_cfgs',
-                      help='set config keys', default=None,
-                      nargs=argparse.REMAINDER)
+    parser.add_argument(
+        '--cfg',
+        dest='cfg_file',
+        help='optional config file',
+        default='cfgs/vgg16.yml',
+        type=str)
+    parser.add_argument(
+        '--set',
+        dest='set_cfgs',
+        help='set config keys',
+        default=[],
+        nargs=argparse.REMAINDER)
 
-  parser.add_argument('--cuda', dest='cuda',
-                      help='whether use CUDA',
-                      action='store_true')
-  parser.add_argument('--mGPUs', dest='mGPUs',
-                      help='whether use multiple GPUs',
-                      action='store_true')
-  parser.add_argument('--bs', dest='batch_size',
-                      help='batch_size',
-                      default=1, type=int)
+    parser.add_argument(
+        '--cuda', dest='cuda', help='whether use CUDA', action='store_true')
+    parser.add_argument(
+        '--mGPUs',
+        dest='mGPUs',
+        help='whether use multiple GPUs',
+        action='store_true')
+    parser.add_argument(
+        '--bs', dest='batch_size', help='batch_size', default=1, type=int)
 
-  parser.add_argument('--load_ckpt',
-                      help='path of checkpoint to load')
-  parser.add_argument('--load_detectron',
-                      help='path to the detectron weight pickle file')
+    parser.add_argument('--load_ckpt', help='path of checkpoint to load')
+    parser.add_argument(
+        '--load_detectron', help='path to the detectron weight pickle file')
 
-  parser.add_argument('--image_dir', dest='image_dir',
-                      help='directory to load images for demo', default="images")
-  parser.add_argument('--output_dir',
-                      help='directory to save demo results', default="mask_vis")
-  parser.add_argument('--merge_pdfs', type=distutils.util.strtobool,
-                      default=True)
+    parser.add_argument(
+        '--image_dir',
+        dest='image_dir',
+        help='directory to load images for demo',
+        default="images")
+    parser.add_argument(
+        '--output_dir',
+        help='directory to save demo results',
+        default="mask_vis")
+    parser.add_argument(
+        '--merge_pdfs', type=distutils.util.strtobool, default=True)
 
-  args = parser.parse_args()
+    args = parser.parse_args()
 
-  return args
+    return args
 
 
 def _get_image_blob(im):
-  """Converts an image into a network input. Preprocessing: subtract mean and resize.
-  Arguments:
-    im (ndarray): a color image in **RGB** order
-  Returns:
-    blob (ndarray): a data blob holding an image pyramid
-    im_scale_factors (list): list of image scales (relative to im) used
-      in the image pyramid
-  """
-  im_orig = im.astype(np.float32, copy=True)
-  im_orig = im_orig[:, :, ::-1]  # RGB to BGR
-  im_orig -= cfg.PIXEL_MEANS
+    """Converts an image into a network input. Preprocessing: subtract mean and resize.
+    Arguments:
+        im (ndarray): a color image in **RGB** order
+    Returns:
+        blob (ndarray): a data blob holding an image pyramid.
+                        Axis order: (batch elem, channel, height, width)
+        im_scale_factors (list): list of image scales (relative to im) used
+        in the image pyramid
+    """
+    im_orig = im.astype(np.float32, copy=True)
+    im_orig = im_orig[:, :, ::-1]  # RGB to BGR
+    im_orig -= cfg.PIXEL_MEANS
 
-  im_shape = im_orig.shape
-  im_size_min = np.min(im_shape[0:2])
-  im_size_max = np.max(im_shape[0:2])
+    im_shape = im_orig.shape
+    im_size_min = np.min(im_shape[0:2])
+    im_size_max = np.max(im_shape[0:2])
 
-  processed_ims = []
-  im_scale_factors = []
+    processed_ims = []
+    im_scale_factors = []
 
-  for target_size in cfg.TEST.SCALES:
-    im_scale = float(target_size) / float(im_size_min)
-    # Prevent the biggest axis from being more than MAX_SIZE
-    if np.round(im_scale * im_size_max) > cfg.TEST.MAX_SIZE:
-      im_scale = float(cfg.TEST.MAX_SIZE) / float(im_size_max)
-    im = cv2.resize(im_orig, None, None, fx=im_scale, fy=im_scale,
-                    interpolation=cv2.INTER_LINEAR)
-    im_scale_factors.append(im_scale)
-    processed_ims.append(im)
+    for target_size in cfg.TEST.SCALES:
+        im_scale = float(target_size) / float(im_size_min)
+        # Prevent the biggest axis from being more than MAX_SIZE
+        if np.round(im_scale * im_size_max) > cfg.TEST.MAX_SIZE:
+            im_scale = float(cfg.TEST.MAX_SIZE) / float(im_size_max)
+        im = cv2.resize(
+            im_orig,
+            None,
+            None,
+            fx=im_scale,
+            fy=im_scale,
+            interpolation=cv2.INTER_LINEAR)
+        im_scale_factors.append(im_scale)
+        processed_ims.append(im)
 
-  # Create a blob to hold the input images
-  blob = blob_utils.im_list_to_blob(processed_ims)
-  return blob, np.array(im_scale_factors)
+    # Create a blob to hold the input images
+    blob = blob_utils.im_list_to_blob(processed_ims)
+    return blob, np.array(im_scale_factors)
 
 
 if __name__ == '__main__':
 
-  args = parse_args()
-  print('Called with args:')
-  print(args)
+    args = parse_args()
+    print('Called with args:')
+    print(args)
 
-  if args.dataset == "coco":
-    imdb = datasets.coco_mask.coco_mask('val', '2017')
-    cfg.MODEL.NUM_CLASSES = imdb.num_classes
-  else:
-    raise NotImplementedError
-
-  args.cfg_file = "cfgs/{}_mask_ls.yml".format(args.net) if args.large_scale \
-    else "cfgs/{}_mask.yml".format(args.net)
-
-  if args.detectron_arch:
-    args.set_cfgs = ['ANCHOR_SCALES', '[2, 4, 8, 16, 32]', 'ANCHOR_RATIOS', '[0.5, 1, 2]',
-                     'RPN.CLS_ACTIVATION', 'sigmoid', 'RPN.OUT_DIM_AS_IN_DIM', 'True']
-  else:
-    args.set_cfgs = ['ANCHOR_SCALES', '[4, 8, 16, 32]', 'ANCHOR_RATIOS', '[0.5, 1, 2]']
-
-  if args.cfg_file is not None:
-    cfg_from_file(args.cfg_file)
-  if args.set_cfgs is not None:
-    cfg_from_list(args.set_cfgs)
-
-  if args.load_detectron:
-    cfg.TEST.RPN_PRE_NMS_TOP_N = 6000
-    cfg.TEST.RPN_POST_NMS_TOP_N = 1000
-    cfg.TEST.MAX_SIZE = 1333
-    # cfg.TEST.SCALES = (800,)
-    # cfg.TEST.NMS = 0.5
-
-  print('Using config:')
-  pprint.pprint(cfg)
-
-  if torch.cuda.is_available() and not args.cuda:
-    print("WARNING: You have a CUDA device, so you should probably run with --cuda")
-
-  # Set random seed
-  # np.random.seed(cfg.RNG_SEED)
-  imdb.competition_mode(on=True)
-
-  maskRCNN = Generalized_RCNN()
-
-  if args.load_ckpt:
-    load_name = args.load_ckpt
-    print("loading checkpoint %s" % (load_name))
-    checkpoint = torch.load(load_name)
-    maskRCNN.load_state_dict(checkpoint['model'])
-    if 'pooling_mode' in checkpoint.keys():
-      assert cfg.POOLING_MODE == checkpoint['pooling_mode']
-
-  if args.load_detectron:
-    print("loading detectron weights %s" % args.load_detectron)
-    if args.net == 'res50':
-      load_detectron_weight(maskRCNN, args.load_detectron)
+    if args.dataset == "coco":
+        imdb = datasets.coco_mask.coco_mask('val', '2017')
+        cfg.MODEL.NUM_CLASSES = imdb.num_classes
     else:
-      raise NotImplementedError
+        raise NotImplementedError
 
-    # mimic the Detectron affinechannel op
-    def set_bn_stats(m):
-      if isinstance(m, nn.BatchNorm2d):
-        nn.init.constant(m.running_mean, 0)
-        nn.init.constant(m.running_var, 1)
-    maskRCNN.apply(set_bn_stats)
+    args.cfg_file = "cfgs/{}_mask_ls.yml".format(args.net) if args.large_scale \
+      else "cfgs/{}_mask.yml".format(args.net)
 
-  if args.mGPUs:
-    maskRCNN = nn.DataParallel(maskRCNN)
-  if args.cuda:
-    maskRCNN.cuda()
+    if not args.detectron_arch:
+        args.set_cfgs += [
+            'ANCHOR_SCALES', '[4, 8, 16, 32]', 'ANCHOR_RATIOS', '[0.5, 1, 2]',
+            'RPN.CLS_ACTIVATION', 'softmax', 'RPN.OUT_DIM_AS_IN_DIM', 'False'
+        ]
+    else:
+        args.set_cfgs += [
+            'ANCHOR_SCALES', '[2, 4, 8, 16, 32]', 'ANCHOR_RATIOS',
+            '[0.5, 1, 2]'
+        ]
 
-  maskRCNN.eval()
+    if args.cfg_file is not None:
+        cfg_from_file(args.cfg_file)
+    if args.set_cfgs is not None:
+        cfg_from_list(args.set_cfgs)
 
-  imglist = misc_utils.get_imagelist_from_dir(args.image_dir)
-  num_images = len(imglist)
-  if not os.path.exists(args.output_dir):
-    os.makedirs(args.output_dir)
+    if args.load_detectron:
+        cfg.TEST.RPN_PRE_NMS_TOP_N = 6000
+        cfg.TEST.RPN_POST_NMS_TOP_N = 1000
+        cfg.TEST.MAX_SIZE = 1333
+        # cfg.TEST.SCALES = (800,)
+        cfg.TEST.NMS = 0.1
 
-  for i in xrange(num_images):
-    print('img', i)
-    im = skio.imread(os.path.join(args.image_dir, imglist[i]))
-    if im.ndim == 2:
-      im = np.tile(im[:, :, np.newaxis], (1, 1, 3))
+    print('Using config:')
+    pprint.pprint(cfg)
 
-    im_data, im_scales = _get_image_blob(im)
-    assert len(im_scales) == 1, "Only single-image batch implemented"
-    im_info = np.array([[im_data.shape[1], im_data.shape[2], im_scales[0]]], dtype=np.float32)
+    if torch.cuda.is_available() and not args.cuda:
+        print(
+            "WARNING: You have a CUDA device, so you should probably run with --cuda"
+        )
 
-    im_data = Variable(torch.from_numpy(im_data).permute(0, 3, 1, 2), volatile=True)
-    im_info = Variable(torch.from_numpy(im_info), volatile=True)
-    gt_boxes = Variable(torch.zeros(1, 1, 5), volatile=True)
-    num_boxes = Variable(torch.zeros(1), volatile=True)
+    # Set random seed
+    # np.random.seed(cfg.RNG_SEED)
+    imdb.competition_mode(on=True)
 
+    maskRCNN = Generalized_RCNN()
+
+    if args.load_ckpt:
+        load_name = args.load_ckpt
+        print("loading checkpoint %s" % (load_name))
+        checkpoint = torch.load(load_name)
+        maskRCNN.load_state_dict(checkpoint['model'])
+        if 'pooling_mode' in checkpoint.keys():
+            assert cfg.POOLING_MODE == checkpoint['pooling_mode']
+
+    if args.load_detectron:
+        print("loading detectron weights %s" % args.load_detectron)
+        if args.net == 'res50':
+            load_detectron_weight(maskRCNN, args.load_detectron)
+        else:
+            raise NotImplementedError
+
+        # mimic the Detectron affinechannel op
+        def set_bn_stats(m):
+            if isinstance(m, nn.BatchNorm2d):
+                nn.init.constant(m.running_mean, 0)
+                nn.init.constant(m.running_var, 1)
+
+        maskRCNN.apply(set_bn_stats)
+
+    if args.mGPUs:
+        maskRCNN = nn.DataParallel(maskRCNN)
     if args.cuda:
-      im_data = im_data.cuda()
-      im_info = im_info.cuda()
-      gt_boxes = gt_boxes.cuda()
-      num_boxes = num_boxes.cuda()
+        maskRCNN.cuda()
 
-    timers = defaultdict(Timer)
+    maskRCNN.eval()
 
-    cls_boxes, cls_segms, cls_keyps = im_detect_all(
-      maskRCNN, im_data, im_info, gt_boxes, num_boxes,
-      args, timers=timers)
+    imglist = misc_utils.get_imagelist_from_dir(args.image_dir)
+    num_images = len(imglist)
+    if not os.path.exists(args.output_dir):
+        os.makedirs(args.output_dir)
 
-    imname, _ = os.path.splitext(imglist[i])
-    vis_utils.vis_one_image(
-      im, imname, args.output_dir,
-      cls_boxes, cls_segms, cls_keyps,
-      thresh=0.5, box_alpha=0.7, dataset=imdb, show_class=True)
+    for i in xrange(num_images):
+        print('img', i)
+        im = skio.imread(os.path.join(args.image_dir, imglist[i]))
+        if im.ndim == 2:
+            im = np.tile(im[:, :, np.newaxis], (1, 1, 3))
 
-  if args.merge_pdfs:
-    merge_out_path = '{}/results.pdf'.format(args.output_dir)
-    if os.path.exists(merge_out_path):
-      os.remove(merge_out_path)
-    command = "pdfunite {}/*.pdf {}".format(args.output_dir, merge_out_path)
-    subprocess.call(command, shell=True)
+        im_data, im_scales = _get_image_blob(im)
+        assert len(im_scales) == 1, "Only single-image batch implemented"
+        im_info = np.array([[im_data.shape[2], im_data.shape[3], im_scales[0]]], dtype=np.float32)
+
+        im_data = Variable(torch.from_numpy(im_data), volatile=True)
+        im_info = Variable(torch.from_numpy(im_info), volatile=True)
+        gt_boxes = Variable(torch.zeros(1, 1, 5), volatile=True)
+        num_boxes = Variable(torch.zeros(1), volatile=True)
+
+        if args.cuda:
+            im_data = im_data.cuda()
+            im_info = im_info.cuda()
+            gt_boxes = gt_boxes.cuda()
+            num_boxes = num_boxes.cuda()
+
+        timers = defaultdict(Timer)
+
+        cls_boxes, cls_segms, cls_keyps = im_detect_all(
+            maskRCNN,
+            im_data,
+            im_info,
+            gt_boxes,
+            num_boxes,
+            args,
+            timers=timers)
+
+        imname, _ = os.path.splitext(imglist[i])
+        vis_utils.vis_one_image(
+            im,
+            imname,
+            args.output_dir,
+            cls_boxes,
+            cls_segms,
+            cls_keyps,
+            thresh=0.5,
+            box_alpha=0.7,
+            dataset=imdb,
+            show_class=True)
+
+    if args.merge_pdfs:
+        merge_out_path = '{}/results.pdf'.format(args.output_dir)
+        if os.path.exists(merge_out_path):
+            os.remove(merge_out_path)
+        command = "pdfunite {}/*.pdf {}".format(args.output_dir,
+                                                merge_out_path)
+        subprocess.call(command, shell=True)

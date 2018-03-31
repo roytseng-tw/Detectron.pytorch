@@ -25,7 +25,7 @@ from modeling.model_builder import Generalized_RCNN
 from utils.detectron_weight_helper import load_detectron_weight
 from utils.timer import Timer
 from model.utils.net_utils import clip_gradient, adjust_learning_rate
-from model.utils.misc import get_run_name
+from utils.misc import get_run_name
 import nn as mynn
 
 logging.basicConfig(level=logging.INFO)
