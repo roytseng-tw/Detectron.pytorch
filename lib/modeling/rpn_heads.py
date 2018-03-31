@@ -95,19 +95,19 @@ def single_scale_rpn_losses(
         rpn_labels_int32_wide, rpn_bbox_targets_wide,
         rpn_bbox_inside_weights_wide, rpn_bbox_outside_weights_wide):
     h, w = rpn_cls_logits.shape[2:]
-    rpn_labels_int32 = rpn_labels_int32_wide[:, :, :h, :w]
+    rpn_labels_int32 = rpn_labels_int32_wide[:, :, :h, :w]   # -1 means ignore
     h, w = rpn_bbox_pred.shape[2:]
     rpn_bbox_targets = rpn_bbox_targets_wide[:, :, :h, :w]
     rpn_bbox_inside_weights = rpn_bbox_inside_weights_wide[:, :, :h, :w]
     rpn_bbox_outside_weights = rpn_bbox_outside_weights_wide[:, :, :h, :w]
 
     if cfg.RPN.CLS_ACTIVATION == 'softmax':
-        pass
-        #TODO
-        # rpn_labels_int32.long()
-        # loss_rpn_cls = F.cross_entropy(rpn_cls_logits)
+        B, C, H, W = rpn_cls_logits.size()
+        rpn_cls_logits = rpn_cls_logits.view(B, 2, C / 2, H, W).permute(0, 2, 3, 4, 1).view(-1, 2)
+        rpn_labels_int32 = rpn_labels_int32.view(-1).long()
+        loss_rpn_cls = F.cross_entropy(rpn_cls_logits, rpn_labels_int32, ignore_index=-1)
     else:
-        weight = (rpn_labels_int32 != -1).float()  # -1 means ignore
+        weight = (rpn_labels_int32 != -1).float()
         loss_rpn_cls = F.binary_cross_entropy_with_logits(
             rpn_cls_logits, rpn_labels_int32.float(), weight)
 
