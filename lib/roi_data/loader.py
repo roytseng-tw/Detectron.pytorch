@@ -47,7 +47,7 @@ class RoiDataLoader(data.Dataset):
                 entry['segms'] = [entry['segms'][ind] for ind in valid_inds]
 
         # Padding the image based on the ratio
-        self.pad_data(blobs, ratio, imsizes)
+        self.pad_data(blobs, imsizes)
 
         blobs['roidb'] = blob_utils.serialize(blobs['roidb'])  # CHECK: maybe we should serialize in collate_fn
 
@@ -62,8 +62,8 @@ class RoiDataLoader(data.Dataset):
         boxes = blobs['roidb'][0]['boxes']
         if ratio < 1:  # width << height, crop height
             size_crop = math.ceil(data_width / ratio)  # size after crop
-            min_y = math.floor(np.min(boxes[:,1]))
-            max_y = math.floor(np.max(boxes[:,3]))
+            min_y = math.floor(np.min(boxes[:, 1]))
+            max_y = math.floor(np.max(boxes[:, 3]))
             box_region = max_y - min_y + 1
             if min_y == 0:
                 y_s = 0
@@ -118,7 +118,7 @@ class RoiDataLoader(data.Dataset):
             np.clip(boxes[:, 2], 0, size_crop - 1, out=boxes[:, 2])
             blobs['roidb'][0]['boxes'] = boxes
 
-    def pad_data(self, blobs, ratio, imsizes):
+    def pad_data(self, blobs, imsizes):
         data_height, data_width = map(int, blobs['im_info'][:2])
         target_height, target_width = map(int, imsizes[0])
         data_padded = np.zeros((3, target_height, target_width), dtype=np.float32)

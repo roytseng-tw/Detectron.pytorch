@@ -31,6 +31,35 @@ from six.moves import cPickle as pickle
 import numpy as np
 import cv2
 
+from core.config import cfg
+
+
+def get_image_blob(im, target_scale, target_max_size):
+    """Convert an image into a network input.
+
+    Arguments:
+        im (ndarray): a color image in BGR order
+
+    Returns:
+        blob (ndarray): a data blob holding an image pyramid
+        im_scale (float): image scale (target size) / (original size)
+        im_info (ndarray)
+    """
+    processed_im, im_scale = prep_im_for_blob(
+        im, cfg.PIXEL_MEANS, target_scale, target_max_size
+    )
+    blob = im_list_to_blob(processed_im)
+    # NOTE: this height and width may be larger than actual scaled input image
+    # due to the FPN.COARSEST_STRIDE related padding in im_list_to_blob. We are
+    # maintaining this behavior for now to make existing results exactly
+    # reproducible (in practice using the true input image height and width
+    # yields nearly the same results, but they are sometimes slightly different
+    # because predictions near the edge of the image will be pruned more
+    # aggressively).
+    height, width = blob.shape[2], blob.shape[3]
+    im_info = np.hstack((height, width, im_scale))[np.newaxis, :]
+    return blob, im_scale, im_info.astype(np.float32)
+
 
 def im_list_to_blob(ims):
     """Convert a list of images into a network input. Assumes images were

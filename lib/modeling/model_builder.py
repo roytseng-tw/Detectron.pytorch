@@ -112,9 +112,9 @@ class Generalized_RCNN(nn.Module):
         cfg.IS_TRAIN = mode
         super().train(mode)
 
-    def forward(self, data, im_info, roidb,
-                rpn_labels_int32_wide, rpn_bbox_targets_wide,
-                rpn_bbox_inside_weights_wide, rpn_bbox_outside_weights_wide):
+    def forward(self, data, im_info, roidb=None,
+                rpn_labels_int32_wide=None, rpn_bbox_targets_wide=None,
+                rpn_bbox_inside_weights_wide=None, rpn_bbox_outside_weights_wide=None):
         im_data = data
         roidb = list(map(lambda x: blob_utils.deserialize(x)[0], roidb))
 
@@ -130,7 +130,7 @@ class Generalized_RCNN(nn.Module):
         rpn_ret = self.RPN(blob_conv, im_info, roidb)
 
         rois = Variable(torch.from_numpy(rpn_ret['rois'])).cuda(device_id)
-        # return_dict['rois'] = rois
+        return_dict['rois'] = rois
         return_dict['rois_label'] = rpn_ret['labels_int32']
 
         rois_feat = self.roi_feature_transform(rois, blob_conv)
@@ -183,7 +183,6 @@ class Generalized_RCNN(nn.Module):
                 kps_pred = self.Keypoint_Outs(kps_feat)
                 # return_dict['keypoints_pred'] = kps_pred
                 # keypoints loss TODO
-
 
         return return_dict
 

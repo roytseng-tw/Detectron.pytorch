@@ -1,32 +1,30 @@
+""" Training Script """
+
 import argparse
 import distutils.util
 import os
 import sys
-import pickle
-import pprint
 import traceback
 import logging
 from collections import defaultdict
 
 import numpy as np
-import cv2
-cv2.setNumThreads(0)  # pytorch issue 1355: possible deadlock in dataloader
-import tqdm
-
 import torch
 from torch.autograd import Variable
 import torch.nn as nn
+import cv2
+cv2.setNumThreads(0)  # pytorch issue 1355: possible deadlock in dataloader
 
-import _init_paths
+import _init_paths  # pylint: disable=unused-import
+import nn as mynn
 from core.config import cfg, cfg_from_file, cfg_from_list
 from datasets_new.roidb import combined_roidb_for_training
 from roi_data.loader import RoiDataLoader, MinibatchSampler, collate_minibatch
 from modeling.model_builder import Generalized_RCNN
+from model.utils.net_utils import clip_gradient, adjust_learning_rate
 from utils.detectron_weight_helper import load_detectron_weight
 from utils.timer import Timer
-from model.utils.net_utils import clip_gradient, adjust_learning_rate
 from utils.misc import get_run_name
-import nn as mynn
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -34,8 +32,8 @@ logger = logging.getLogger(__name__)
 
 def parse_args():
     """
-  Parse input arguments
-  """
+    Parse input arguments
+    """
     parser = argparse.ArgumentParser(description='Train a Fast R-CNN network')
     parser.add_argument(
         '--dataset',
@@ -207,13 +205,14 @@ def save(output_dir, args, epoch, step, model, optimizer, iters_per_epoch):
 
 
 if __name__ == '__main__':
+    # pylint: disable=C0103
+
+    if not torch.cuda.is_available():
+        sys.exit("Need a CUDA device to run the code.")
 
     args = parse_args()
     print('Called with args:')
     print(args)
-
-    if not torch.cuda.is_available():
-        sys.exit("Need a CUDA device to run the code.")
 
     cfg.NUM_GPUS = torch.cuda.device_count()
     assert (args.batch_size % cfg.NUM_GPUS) == 0, 'batch_size: %d, NUM_GPUS: %d' % (args.batch_size, cfg.NUM_GPUS)
@@ -415,11 +414,13 @@ if __name__ == '__main__':
                     bg_cnt = rois_label.data.numel() - fg_cnt
 
                     print("[%s][session %d][epoch %2d][iter %4d / %4d]"
-                        % (run_name, args.session, epoch, step, iters_per_epoch))
+                          % (run_name, args.session, epoch, step, iters_per_epoch))
                     print("\t\tloss: %.4f, lr: %.2e" % (loss_avg, lr))
                     print("\t\tfg/bg=(%d/%d), time cost: %f" % (fg_cnt, bg_cnt, diff))
-                    print("\t\trpn_cls: %.4f, rpn_bbox: %.4f, rcnn_cls: %.4f, rcnn_bbox %.4f, rcnn_mask %.4f"
-                        % (loss_rpn_cls, loss_rpn_bbox, loss_rcnn_cls, loss_rcnn_bbox, loss_rcnn_mask))
+                    print("\t\trpn_cls: %.4f, rpn_bbox: %.4f, rcnn_cls: %.4f,"
+                          "rcnn_bbox %.4f, rcnn_mask %.4f"
+                          % (loss_rpn_cls, loss_rpn_bbox, loss_rcnn_cls,
+                             loss_rcnn_bbox, loss_rcnn_mask))
                     if args.use_tfboard:
                         info = {
                             'loss': loss_avg,
@@ -448,8 +449,8 @@ if __name__ == '__main__':
     except (RuntimeError, KeyboardInterrupt) as e:
         print('Save on exception:', e)
         save(output_dir, args, epoch, step, maskRCNN, optimizer, iters_per_epoch)
-        tb = traceback.format_exc()
-        print(tb)
+        stack_trace = traceback.format_exc()
+        print(stack_trace)
 
     finally:
         # ---- Training ends ----

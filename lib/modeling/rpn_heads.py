@@ -42,7 +42,7 @@ class Single_Scale_RPN_Outputs(nn.Module):
         init.normal(self.RPN_bbox_pred.weight, std=0.01)
         init.constant(self.RPN_bbox_pred.bias, 0)
 
-    def forward(self, x, im_info, roidb):
+    def forward(self, x, im_info, roidb=None):
         """
         x: feature maps from the backbone network. (Variable)
         im_info: (CPU Variable)

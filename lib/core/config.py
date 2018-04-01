@@ -66,7 +66,7 @@ __C.TRAIN.TRIM_WIDTH = 600
 
 # Images *per GPU* in the training minibatch
 # Total images per minibatch = TRAIN.IMS_PER_BATCH * NUM_GPUS
-__C.TRAIN.IMS_PER_BATCH = 1
+__C.TRAIN.IMS_PER_BATCH = 2
 
 # RoI minibatch size *per image* (number of regions of interest [ROIs])
 # Total number of RoIs per training minibatch =
@@ -83,7 +83,7 @@ __C.TRAIN.FG_THRESH = 0.5
 # Overlap threshold for a ROI to be considered background (class = 0 if
 # overlap in [LO, HI))
 __C.TRAIN.BG_THRESH_HI = 0.5
-__C.TRAIN.BG_THRESH_LO = 0.1
+__C.TRAIN.BG_THRESH_LO = 0.0
 
 # Use horizontally-flipped images during training?
 __C.TRAIN.USE_FLIPPED = True
@@ -112,8 +112,8 @@ __C.TRAIN.BBOX_NORMALIZE_TARGETS = True
 # Deprecated (inside weights)
 __C.TRAIN.BBOX_INSIDE_WEIGHTS = (1.0, 1.0, 1.0, 1.0)
 # Normalize the targets using "precomputed" (or made up) means and stdevs
-# (BBOX_NORMALIZE_TARGETS must also be True)
-__C.TRAIN.BBOX_NORMALIZE_TARGETS_PRECOMPUTED = True
+# (BBOX_NORMALIZE_TARGETS must also be True) (legacy)
+__C.TRAIN.BBOX_NORMALIZE_TARGETS_PRECOMPUTED = False
 __C.TRAIN.BBOX_NORMALIZE_MEANS = (0.0, 0.0, 0.0, 0.0)
 __C.TRAIN.BBOX_NORMALIZE_STDS = (0.1, 0.1, 0.2, 0.2)
 
@@ -184,7 +184,7 @@ __C.TEST = edict()
 
 # Scale to use during testing (can NOT list multiple scales)
 # The scale is the pixel size of an image's shortest side
-__C.TEST.SCALES = (600, )
+__C.TEST.SCALE = 600
 
 # Max pixel size of the longest side of a scaled input image
 __C.TEST.MAX_SIZE = 1000
@@ -212,7 +212,7 @@ __C.TEST.RPN_NMS_THRESH = 0.7
 __C.TEST.RPN_PRE_NMS_TOP_N = 6000
 
 ## Number of top scoring boxes to keep after applying NMS to RPN proposals
-__C.TEST.RPN_POST_NMS_TOP_N = 300
+__C.TEST.RPN_POST_NMS_TOP_N = 1000
 
 # Proposal height and width both need to be greater than RPN_MIN_SIZE (at orig image scale)
 __C.TEST.RPN_MIN_SIZE = 16
@@ -232,6 +232,39 @@ __C.TEST.SCORE_THRESH = 0.05
 # Maximum number of detections to return per image (100 is based on the limit
 # established for the COCO dataset)
 __C.TEST.DETECTIONS_PER_IM = 100
+
+# ---------------------------------------------------------------------------- #
+# Soft NMS
+# ---------------------------------------------------------------------------- #
+__C.TEST.SOFT_NMS = edict()
+
+# Use soft NMS instead of standard NMS if set to True
+__C.TEST.SOFT_NMS.ENABLED = False
+# See soft NMS paper for definition of these options
+__C.TEST.SOFT_NMS.METHOD = 'linear'
+__C.TEST.SOFT_NMS.SIGMA = 0.5
+# For the soft NMS overlap threshold, we simply use TEST.NMS
+
+# ---------------------------------------------------------------------------- #
+# Bounding box voting (from the Multi-Region CNN paper)
+# ---------------------------------------------------------------------------- #
+__C.TEST.BBOX_VOTE = edict()
+
+# Use box voting if set to True
+__C.TEST.BBOX_VOTE.ENABLED = False
+
+# We use TEST.NMS threshold for the NMS step. VOTE_TH overlap threshold
+# is used to select voting boxes (IoU >= VOTE_TH) for each box that survives NMS
+__C.TEST.BBOX_VOTE.VOTE_TH = 0.8
+
+# The method used to combine scores when doing bounding box voting
+# Valid options include ('ID', 'AVG', 'IOU_AVG', 'GENERALIZED_AVG', 'QUASI_SUM')
+__C.TEST.BBOX_VOTE.SCORING_METHOD = 'ID'
+
+# Hyperparameter used by the scoring method (it has different meanings for
+# different methods)
+__C.TEST.BBOX_VOTE.SCORING_METHOD_BETA = 1.0
+
 
 #
 # MobileNet options
