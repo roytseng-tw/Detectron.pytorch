@@ -116,7 +116,7 @@ class mask_rcnn_fcn_head_v0upshare(nn.Module):
         return detectron_weight_mapping, orphan_in_detectron
 
     def forward(self, x, roi_has_mask_int32=None):
-        if cfg.IS_TRAIN:
+        if self.training:
             # On training, we share the res5 computation with bbox head, so it's necessary to
             # sample 'useful' batches from the input x (res5_2_sum). 'Useful' means that the
             # batch (roi) has corresponding mask groundtruth, namely having positive values in

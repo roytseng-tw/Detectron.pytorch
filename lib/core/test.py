@@ -72,7 +72,7 @@ def im_detect_all(model, im, box_proposals=None, timers=None):
     scores, boxes, cls_boxes = box_results_with_nms_and_limit(scores, boxes)
     timers['misc_bbox'].toc()
 
-    if cfg.MODEL.MASK_ON:
+    if cfg.MODEL.MASK_ON and boxes.shape[0] > 0:
         timers['im_detect_mask'].tic()
         masks = im_detect_mask(model, im_scale, boxes, blob_conv)
         timers['im_detect_mask'].toc()
@@ -113,6 +113,7 @@ def im_detect_bbox(model, im, target_scale, target_max_size, boxes=None):
     if cfg.MODEL.FASTER_RCNN:
         rois = return_dict['rois'].data.cpu().numpy()
         # unscale back to raw image space
+        print(im_scale, rois.dtype)
         boxes = rois[:, 1:5] / im_scale
 
     # cls prob (activations after softmax)
@@ -130,9 +131,8 @@ def im_detect_bbox(model, im, target_scale, target_max_size, boxes=None):
             box_deltas = box_deltas[:, -4:]
         if cfg.TRAIN.BBOX_NORMALIZE_TARGETS_PRECOMPUTED:
             # (legacy) Optionally normalize targets by a precomputed mean and stdev
-            box_deltas = box_deltas.view(-1, 4) * \
-                         torch.FloatTensor(cfg.TRAIN.BBOX_NORMALIZE_STDS).cuda() \
-                         + torch.FloatTensor(cfg.TRAIN.BBOX_NORMALIZE_MEANS).cuda()
+            box_deltas = box_deltas.view(-1, 4) * cfg.TRAIN.BBOX_NORMALIZE_STDS \
+                         + cfg.TRAIN.BBOX_NORMALIZE_MEANS
         pred_boxes = box_utils.bbox_transform(boxes, box_deltas, cfg.MODEL.BBOX_REG_WEIGHTS)
         pred_boxes = box_utils.clip_tiled_boxes(pred_boxes, im.shape)
         if cfg.MODEL.CLS_AGNOSTIC_BBOX_REG:
@@ -269,8 +269,8 @@ def segm_results(cls_boxes, masks, ref_boxes, im_h, im_w):
                 padded_mask[1:-1, 1:-1] = masks[mask_ind, 0, :, :]
 
             ref_box = ref_boxes[mask_ind, :]
-            w = ref_box[2] - ref_box[0] + 1
-            h = ref_box[3] - ref_box[1] + 1
+            w = (ref_box[2] - ref_box[0] + 1)
+            h = (ref_box[3] - ref_box[1] + 1)
             w = np.maximum(w, 1)
             h = np.maximum(h, 1)
 

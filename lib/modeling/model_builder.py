@@ -89,7 +89,7 @@ class Generalized_RCNN(nn.Module):
 
         self._init_modules()
 
-        # Set trainning for all submodules. Must call at last.
+        # Set trainning for all submodules. Must call after all submodules are added.
         self.train(train)
 
     def _init_modules(self):
