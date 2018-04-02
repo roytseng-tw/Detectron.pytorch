@@ -116,7 +116,8 @@ class Generalized_RCNN(nn.Module):
                 rpn_labels_int32_wide=None, rpn_bbox_targets_wide=None,
                 rpn_bbox_inside_weights_wide=None, rpn_bbox_outside_weights_wide=None):
         im_data = data
-        roidb = list(map(lambda x: blob_utils.deserialize(x)[0], roidb))
+        if self.training:
+            roidb = list(map(lambda x: blob_utils.deserialize(x)[0], roidb))
 
         batch_size = im_data.size(0)
         device_id = im_data.get_device()
@@ -131,7 +132,8 @@ class Generalized_RCNN(nn.Module):
 
         rois = Variable(torch.from_numpy(rpn_ret['rois'])).cuda(device_id)
         return_dict['rois'] = rois
-        return_dict['rois_label'] = rpn_ret['labels_int32']
+        if self.training:
+            return_dict['rois_label'] = rpn_ret['labels_int32']
 
         rois_feat = self.roi_feature_transform(rois, blob_conv)
 

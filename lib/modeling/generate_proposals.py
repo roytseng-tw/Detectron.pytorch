@@ -98,7 +98,7 @@ class GenerateProposalsOp(nn.Module):
             rois = np.append(rois, im_i_rois, axis=0)
             roi_probs = np.append(roi_probs, im_i_probs, axis=0)
 
-        return rois, roi_probs  # Note: ndarraysxs
+        return rois, roi_probs  # Note: ndarrays
 
     def proposals_for_one_image(self, im_info, all_anchors, bbox_deltas, scores):
         # Get mode-dependent configuration

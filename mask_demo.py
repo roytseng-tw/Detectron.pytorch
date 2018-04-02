@@ -42,21 +42,17 @@ def parse_args():
         '--dataset',
         dest='dataset',
         help='training dataset',
-        default='coco',
-        type=str)
+        default='coco')
     parser.add_argument(
         '--net',
         dest='net',
-        help='vgg16, res50, res101, res152',
-        default='res101',
-        type=str)
+        help='res50, res101, res152',
+        default='res50')
 
     parser.add_argument(
         '--cfg',
         dest='cfg_file',
-        help='optional config file',
-        default='cfgs/vgg16.yml',
-        type=str)
+        help='optional config file')
     parser.add_argument(
         '--set',
         dest='set_cfgs',
@@ -140,13 +136,14 @@ def main():
 
     if args.cfg_file is None:
         args.cfg_file = "cfgs/{}_mask.yml".format(args.net)
+    print('cfg file: {}'.format(args.cfg_file))
     cfg_from_file(args.cfg_file)
 
     if args.set_cfgs is not None:
         cfg_from_list(args.set_cfgs)
 
-    print('Using config:')
-    pprint.pprint(cfg)
+    # print('Using config:')
+    # pprint.pprint(cfg)
 
     maskRCNN = Generalized_RCNN(train=False)
 
@@ -189,7 +186,7 @@ def main():
 
         timers = defaultdict(Timer)
 
-        cls_boxes, cls_segms, cls_keyps = im_detect_all(maskRCNN, im, args, timers=timers)
+        cls_boxes, cls_segms, cls_keyps = im_detect_all(maskRCNN, im, timers=timers)
 
         im_name, _ = os.path.splitext(imglist[i])
         vis_utils.vis_one_image(

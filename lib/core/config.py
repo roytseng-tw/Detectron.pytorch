@@ -1,13 +1,20 @@
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
+from __future__ import unicode_literals
 
+import six
 import os
 import os.path as osp
-import numpy as np
-from easydict import EasyDict as edict
+import copy
+from ast import literal_eval
 
-__C = edict()
+import numpy as np
+import yaml
+
+from utils.collections import AttrDict
+
+__C = AttrDict()
 # Consumers can get config by:
 #   from fast_rcnn_config import cfg
 cfg = __C
@@ -15,7 +22,7 @@ cfg = __C
 #
 # Training options
 #
-__C.TRAIN = edict()
+__C.TRAIN = AttrDict()
 
 # Initial learning rate
 __C.TRAIN.LEARNING_RATE = 0.001
@@ -180,7 +187,7 @@ __C.TRAIN.GT_MIN_AREA = -1
 #
 # Testing options
 #
-__C.TEST = edict()
+__C.TEST = AttrDict()
 
 # Scale to use during testing (can NOT list multiple scales)
 # The scale is the pixel size of an image's shortest side
@@ -236,7 +243,7 @@ __C.TEST.DETECTIONS_PER_IM = 100
 # ---------------------------------------------------------------------------- #
 # Soft NMS
 # ---------------------------------------------------------------------------- #
-__C.TEST.SOFT_NMS = edict()
+__C.TEST.SOFT_NMS = AttrDict()
 
 # Use soft NMS instead of standard NMS if set to True
 __C.TEST.SOFT_NMS.ENABLED = False
@@ -248,7 +255,7 @@ __C.TEST.SOFT_NMS.SIGMA = 0.5
 # ---------------------------------------------------------------------------- #
 # Bounding box voting (from the Multi-Region CNN paper)
 # ---------------------------------------------------------------------------- #
-__C.TEST.BBOX_VOTE = edict()
+__C.TEST.BBOX_VOTE = AttrDict()
 
 # Use box voting if set to True
 __C.TEST.BBOX_VOTE.ENABLED = False
@@ -270,7 +277,7 @@ __C.TEST.BBOX_VOTE.SCORING_METHOD_BETA = 1.0
 # MobileNet options
 #
 
-__C.MOBILENET = edict()
+__C.MOBILENET = AttrDict()
 
 # Whether to regularize the depth-wise filters during training
 __C.MOBILENET.REGU_DEPTH = False
@@ -363,7 +370,7 @@ __C.IS_TRAIN = True
 # ---------------------------------------------------------------------------- #
 # Model options
 # ---------------------------------------------------------------------------- #
-__C.MODEL = edict()
+__C.MODEL = AttrDict()
 
 # The backbone conv body to use
 __C.MODEL.CONV_BODY = ''
@@ -415,7 +422,7 @@ __C.MODEL.SHARE_RES5 = False
 # ---------------------------------------------------------------------------- #
 # RPN options
 # ---------------------------------------------------------------------------- #
-__C.RPN = edict()
+__C.RPN = AttrDict()
 
 # `True` for Detectron implementation. `False` for jwyang's implementation.
 __C.RPN.OUT_DIM_AS_IN_DIM = True
@@ -443,7 +450,7 @@ __C.RPN.ASPECT_RATIOS = (0.5, 1, 2)
 # FPN options
 # ---------------------------------------------------------------------------- #
 
-__C.FPN = edict()
+__C.FPN = AttrDict()
 
 # FPN is enabled if True
 __C.FPN.FPN_ON = False
@@ -491,7 +498,7 @@ __C.FPN.EXTRA_CONV_LEVELS = False
 # ---------------------------------------------------------------------------- #
 # Fast R-CNN options
 # ---------------------------------------------------------------------------- #
-__C.FAST_RCNN = edict()
+__C.FAST_RCNN = AttrDict()
 
 # The type of RoI head to use for bounding box classification and regression
 # The string must match a function this is imported in modeling.model_builder
@@ -517,7 +524,7 @@ __C.FAST_RCNN.ROI_XFORM_RESOLUTION = 14
 # ---------------------------------------------------------------------------- #
 # Mask R-CNN options ("MRCNN" means Mask R-CNN)
 # ---------------------------------------------------------------------------- #
-__C.MRCNN = edict()
+__C.MRCNN = AttrDict()
 
 __C.MRCNN.ROI_MASK_HEAD = ''
 
@@ -548,7 +555,7 @@ __C.MRCNN.THRESH_BINARIZE = 0.5
 # ---------------------------------------------------------------------------- #
 # Keyoint Mask R-CNN options ("KRCNN" = Mask R-CNN with Keypoint support)
 # ---------------------------------------------------------------------------- #
-__C.KRCNN = edict()
+__C.KRCNN = AttrDict()
 
 __C.KRCNN.ROI_KEYPOINTS_HEAD = ''
 
@@ -564,7 +571,7 @@ __C.KRCNN.HEATMAP_SIZE = -1
 # ---------------------------------------------------------------------------- #
 # ResNets options ("ResNets" = ResNet and ResNeXt)
 # ---------------------------------------------------------------------------- #
-__C.RESNETS = edict()
+__C.RESNETS = AttrDict()
 
 # Place the stride 2 conv on the 1x1 filter
 # Use True only for the original MSRA ResNet; use False for C2 and Torch models
@@ -633,66 +640,136 @@ def get_output_tb_dir(imdb, weights_filename):
     return outdir
 
 
-def _merge_a_into_b(a, b):
-    """Merge config dictionary a into config dictionary b, clobbering the
-  options in b whenever they are also specified in a.
-  """
-    if type(a) is not edict:
-        return
+def merge_cfg_from_file(cfg_filename):
+    """Load a yaml config file and merge it into the global config."""
+    with open(cfg_filename, 'r') as f:
+        yaml_cfg = AttrDict(yaml.load(f))
+    _merge_a_into_b(yaml_cfg, __C)
 
-    for k, v in a.items():
+cfg_from_file = merge_cfg_from_file
+
+
+def merge_cfg_from_cfg(cfg_other):
+    """Merge `cfg_other` into the global config."""
+    _merge_a_into_b(cfg_other, __C)
+
+
+def merge_cfg_from_list(cfg_list):
+    """Merge config keys, values in a list (e.g., from command line) into the
+    global config. For example, `cfg_list = ['TEST.NMS', 0.5]`.
+    """
+    assert len(cfg_list) % 2 == 0
+    for full_key, v in zip(cfg_list[0::2], cfg_list[1::2]):
+        # if _key_is_deprecated(full_key):
+        #     continue
+        # if _key_is_renamed(full_key):
+        #     _raise_key_rename_error(full_key)
+        key_list = full_key.split('.')
+        d = __C
+        for subkey in key_list[:-1]:
+            assert subkey in d, 'Non-existent key: {}'.format(full_key)
+            d = d[subkey]
+        subkey = key_list[-1]
+        assert subkey in d, 'Non-existent key: {}'.format(full_key)
+        value = _decode_cfg_value(v)
+        value = _check_and_coerce_cfg_value_type(
+            value, d[subkey], subkey, full_key
+        )
+        d[subkey] = value
+
+cfg_from_list = merge_cfg_from_list
+
+
+def _merge_a_into_b(a, b, stack=None):
+    """Merge config dictionary a into config dictionary b, clobbering the
+    options in b whenever they are also specified in a.
+    """
+    assert isinstance(a, AttrDict), 'Argument `a` must be an AttrDict'
+    assert isinstance(b, AttrDict), 'Argument `b` must be an AttrDict'
+
+    for k, v_ in a.items():
+        full_key = '.'.join(stack) + '.' + k if stack is not None else k
         # a must specify keys that are in b
         if k not in b:
-            raise KeyError('{} is not a valid config key'.format(k))
+            # if _key_is_deprecated(full_key):
+            #     continue
+            # elif _key_is_renamed(full_key):
+            #     _raise_key_rename_error(full_key)
+            # else:
+            raise KeyError('Non-existent config key: {}'.format(full_key))
 
-        # the types must match, too
-        old_type = type(b[k])
-        if old_type is not type(v):
-            if isinstance(b[k], np.ndarray):
-                v = np.array(v, dtype=b[k].dtype)
-            else:
-                raise ValueError(('Type mismatch ({} vs. {}) '
-                                  'for config key: {}').format(
-                                      type(b[k]), type(v), k))
+        v = copy.deepcopy(v_)
+        v = _decode_cfg_value(v)
+        v = _check_and_coerce_cfg_value_type(v, b[k], k, full_key)
 
-        # recursively merge dicts
-        if type(v) is edict:
+        # Recursively merge dicts
+        if isinstance(v, AttrDict):
             try:
-                _merge_a_into_b(a[k], b[k])
-            except:
-                print(('Error under config key: {}'.format(k)))
+                stack_push = [k] if stack is None else stack + [k]
+                _merge_a_into_b(v, b[k], stack=stack_push)
+            except BaseException:
                 raise
         else:
             b[k] = v
 
 
-def cfg_from_file(filename):
-    """Load a config file and merge it into the default options."""
-    import yaml
-    with open(filename, 'r') as f:
-        yaml_cfg = edict(yaml.load(f))
+def _decode_cfg_value(v):
+    """Decodes a raw config value (e.g., from a yaml config files or command
+    line argument) into a Python object.
+    """
+    # Configs parsed from raw yaml will contain dictionary keys that need to be
+    # converted to AttrDict objects
+    if isinstance(v, dict):
+        return AttrDict(v)
+    # All remaining processing is only applied to strings
+    if not isinstance(v, six.string_types):
+        return v
+    # Try to interpret `v` as a:
+    #   string, number, tuple, list, dict, boolean, or None
+    try:
+        v = literal_eval(v)
+    # The following two excepts allow v to pass through when it represents a
+    # string.
+    #
+    # Longer explanation:
+    # The type of v is always a string (before calling literal_eval), but
+    # sometimes it *represents* a string and other times a data structure, like
+    # a list. In the case that v represents a string, what we got back from the
+    # yaml parser is 'foo' *without quotes* (so, not '"foo"'). literal_eval is
+    # ok with '"foo"', but will raise a ValueError if given 'foo'. In other
+    # cases, like paths (v = 'foo/bar' and not v = '"foo/bar"'), literal_eval
+    # will raise a SyntaxError.
+    except ValueError:
+        pass
+    except SyntaxError:
+        pass
+    return v
 
-    _merge_a_into_b(yaml_cfg, __C)
 
+def _check_and_coerce_cfg_value_type(value_a, value_b, key, full_key):
+    """Checks that `value_a`, which is intended to replace `value_b` is of the
+    right type. The type is correct if it matches exactly or is one of a few
+    cases in which the type can be easily coerced.
+    """
+    # The types must match (with some exceptions)
+    type_b = type(value_b)
+    type_a = type(value_a)
+    if type_a is type_b:
+        return value_a
 
-def cfg_from_list(cfg_list):
-    """Set config keys via list (e.g., from command line)."""
-    from ast import literal_eval
-    assert len(cfg_list) % 2 == 0
-    for k, v in zip(cfg_list[0::2], cfg_list[1::2]):
-        key_list = k.split('.')
-        d = __C
-        for subkey in key_list[:-1]:
-            assert subkey in d
-            d = d[subkey]
-        subkey = key_list[-1]
-        assert subkey in d
-        try:
-            value = literal_eval(v)
-        except:
-            # handle the case when v is a string literal
-            value = v
-        assert type(value) == type(d[subkey]), \
-            'type {} does not match original type {}'.format(
-                type(value), type(d[subkey]))
-        d[subkey] = value
+    # Exceptions: numpy arrays, strings, tuple<->list
+    if isinstance(value_b, np.ndarray):
+        value_a = np.array(value_a, dtype=value_b.dtype)
+    elif isinstance(value_b, six.string_types):
+        value_a = str(value_a)
+    elif isinstance(value_a, tuple) and isinstance(value_b, list):
+        value_a = list(value_a)
+    elif isinstance(value_a, list) and isinstance(value_b, tuple):
+        value_a = tuple(value_a)
+    else:
+        raise ValueError(
+            'Type mismatch ({} vs. {}) with values ({} vs. {}) for config '
+            'key: {}'.format(type_b, type_a, value_b, value_a, full_key)
+        )
+    return value_a
+

@@ -39,8 +39,6 @@ from torch.autograd import Variable
 import torch
 
 from core.config import cfg
-from model.rpn.bbox_transform import bbox_transform_inv, clip_boxes
-from model.nms.nms_wrapper import nms
 from utils.timer import Timer
 import utils.boxes as box_utils
 import utils.blob as blob_utils
@@ -65,9 +63,6 @@ def im_detect_all(model, im, box_proposals=None, timers=None):
     scores, boxes, im_scale, blob_conv = im_detect_bbox(
         model, im, cfg.TEST.SCALE, cfg.TEST.MAX_SIZE, box_proposals)
     timers['im_detect_bbox'].toc()
-
-    scores = scores.view(-1, scores.size(-1))
-    boxes = boxes.view(-1, boxes.size(-1))
 
     # score and boxes are from the whole image after score thresholding and nms
     # (they are not separated by class) (numpy.ndarray)
@@ -110,10 +105,10 @@ def im_detect_bbox(model, im, target_scale, target_max_size, boxes=None):
         inputs['rois'] = inputs['rois'][index, :]
         boxes = boxes[index, :]
 
-    data = Variable(torch.from_numpy(inputs['data'])).cuda(0)  # forcely put on first cuda device
-    im_info = Variable(torch.from_numpy(inputs['im_info']))
+    im_data = Variable(torch.from_numpy(inputs['data']), volatile=True).cuda(0)  # forcely put on first cuda device
+    im_info = Variable(torch.from_numpy(inputs['im_info']), volatile=True)
 
-    return_dict = model(data. im_info)
+    return_dict = model(im_data, im_info)
 
     if cfg.MODEL.FASTER_RCNN:
         rois = return_dict['rois'].data.cpu().numpy()
@@ -127,7 +122,7 @@ def im_detect_bbox(model, im, target_scale, target_max_size, boxes=None):
 
     if cfg.TEST.BBOX_REG:
         # Apply bounding-box regression deltas
-        box_deltas = return_dict['bbox_pred'].data.cpu().numpy()
+        box_deltas = return_dict['bbox_pred'].data.cpu().numpy().squeeze()
         # In case there is 1 proposal
         box_deltas = box_deltas.reshape([-1, box_deltas.shape[-1]])
         if cfg.MODEL.CLS_AGNOSTIC_BBOX_REG:
@@ -139,7 +134,7 @@ def im_detect_bbox(model, im, target_scale, target_max_size, boxes=None):
                          torch.FloatTensor(cfg.TRAIN.BBOX_NORMALIZE_STDS).cuda() \
                          + torch.FloatTensor(cfg.TRAIN.BBOX_NORMALIZE_MEANS).cuda()
         pred_boxes = box_utils.bbox_transform(boxes, box_deltas, cfg.MODEL.BBOX_REG_WEIGHTS)
-        pred_boxes = box_utils.clip_tiled_boxes(pred_boxes, im_info.data)
+        pred_boxes = box_utils.clip_tiled_boxes(pred_boxes, im.shape)
         if cfg.MODEL.CLS_AGNOSTIC_BBOX_REG:
             pred_boxes = np.tile(pred_boxes, (1, scores.shape[1]))
     else:

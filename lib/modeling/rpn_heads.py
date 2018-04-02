@@ -42,6 +42,18 @@ class Single_Scale_RPN_Outputs(nn.Module):
         init.normal(self.RPN_bbox_pred.weight, std=0.01)
         init.constant(self.RPN_bbox_pred.bias, 0)
 
+    def detectron_weight_mapping(self):
+        detectron_weight_mapping = {
+            'RPN_conv.weight': 'conv_rpn_w',
+            'RPN_conv.bias': 'conv_rpn_b',
+            'RPN_cls_score.weight': 'rpn_cls_logits_w',
+            'RPN_cls_score.bias': 'rpn_cls_logits_b',
+            'RPN_bbox_pred.weight': 'rpn_bbox_pred_w',
+            'RPN_bbox_pred.bias': 'rpn_bbox_pred_b'
+        }
+        orphan_in_detectron = []
+        return detectron_weight_mapping, orphan_in_detectron
+
     def forward(self, x, im_info, roidb=None):
         """
         x: feature maps from the backbone network. (Variable)

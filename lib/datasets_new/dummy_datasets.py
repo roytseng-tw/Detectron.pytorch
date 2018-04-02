@@ -22,12 +22,12 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
-from easydict import EasyDict as edict
+from utils.collections import AttrDict
 
 
 def get_coco_dataset():
     """A dummy COCO dataset that includes only the 'classes' field."""
-    ds = edict()
+    ds = AttrDict()
     classes = [
         '__background__', 'person', 'bicycle', 'car', 'motorcycle', 'airplane',
         'bus', 'train', 'truck', 'boat', 'traffic light', 'fire hydrant',
