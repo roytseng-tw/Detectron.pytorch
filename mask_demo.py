@@ -141,6 +141,8 @@ def main():
 
     if args.set_cfgs is not None:
         cfg_from_list(args.set_cfgs)
+    
+    cfg.RESNETS.PRETRAINED = False
 
     # print('Using config:')
     # pprint.pprint(cfg)

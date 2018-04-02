@@ -9,7 +9,7 @@ from torch.autograd import Variable
 from core.config import cfg
 from model.roi_pooling.modules.roi_pool import _RoIPooling
 from model.roi_crop.modules.roi_crop import _RoICrop
-from model.roi_align.modules.roi_align import RoIAlignAvg
+from modeling.roi_xfrom.roi_align.modules.roi_align import RoIAlign
 from model.utils.net_utils import _affine_grid_gen
 import modeling.rpn_heads as rpn_heads
 import modeling.fast_rcnn_heads as fast_rcnn_heads
@@ -59,7 +59,7 @@ class Generalized_RCNN(nn.Module):
         elif cfg.POOLING_MODE == 'crop':
             self.Roi_Xform = _RoICrop()
         elif cfg.POOLING_MODE == 'align':
-            self.Roi_Xform = RoIAlignAvg(cfg.POOLING_SIZE, cfg.POOLING_SIZE, 1 / 16)
+            self.Roi_Xform = RoIAlign(cfg.POOLING_SIZE, cfg.POOLING_SIZE, 1 / 16, 0)
         else:
             raise ValueError(cfg.POOLING_MODE)
 

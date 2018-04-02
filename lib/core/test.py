@@ -113,7 +113,6 @@ def im_detect_bbox(model, im, target_scale, target_max_size, boxes=None):
     if cfg.MODEL.FASTER_RCNN:
         rois = return_dict['rois'].data.cpu().numpy()
         # unscale back to raw image space
-        print(im_scale, rois.dtype)
         boxes = rois[:, 1:5] / im_scale
 
     # cls prob (activations after softmax)

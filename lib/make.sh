@@ -33,20 +33,29 @@ nvcc -c -o roi_pooling.cu.o roi_pooling_kernel.cu \
 cd ../
 python build.py
 
-# compile roi_align
-cd ../../
-cd model/roi_align/src
-echo "Compiling roi align kernels by nvcc..."
-nvcc -c -o roi_align_kernel.cu.o roi_align_kernel.cu \
-	 -D GOOGLE_CUDA=1 -x cu -Xcompiler -fPIC $CUDA_ARCH
-cd ../
-python build.py
+# # compile roi_align
+# cd ../../
+# cd model/roi_align/src
+# echo "Compiling roi align kernels by nvcc..."
+# nvcc -c -o roi_align_kernel.cu.o roi_align_kernel.cu \
+# 	 -D GOOGLE_CUDA=1 -x cu -Xcompiler -fPIC $CUDA_ARCH
+# cd ../
+# python build.py
 
 # compile roi_crop
 cd ../../
 cd model/roi_crop/src
 echo "Compiling roi crop kernels by nvcc..."
 nvcc -c -o roi_crop_cuda_kernel.cu.o roi_crop_cuda_kernel.cu \
+	 -D GOOGLE_CUDA=1 -x cu -Xcompiler -fPIC $CUDA_ARCH
+cd ../
+python build.py
+
+# compile roi_align (based on Caffe2's implementation)
+cd ../../
+cd modeling/roi_xfrom/roi_align/src
+echo "Compiling roi align kernels by nvcc..."
+nvcc -c -o roi_align_kernel.cu.o roi_align_kernel.cu \
 	 -D GOOGLE_CUDA=1 -x cu -Xcompiler -fPIC $CUDA_ARCH
 cd ../
 python build.py
