@@ -23,13 +23,12 @@ import torch.nn as nn
 from torch.autograd import Variable
 
 import _init_paths
-from core.config import cfg, cfg_from_file, cfg_from_list
+from core.config import cfg, cfg_from_file, cfg_from_list, assert_and_infer_cfg
 from core.test import im_detect_all
 from modeling.model_builder import Generalized_RCNN
 from utils.detectron_weight_helper import load_detectron_weight
 from utils.timer import Timer
 import datasets_new.dummy_datasets as datasets
-import model.utils.net_utils as net_utils
 import utils.blob as blob_utils
 import utils.vis as vis_utils
 import utils.misc as misc_utils
@@ -39,26 +38,16 @@ def parse_args():
     """Parse in command line arguments"""
     parser = argparse.ArgumentParser(description='Demonstrate mask-rcnn results')
     parser.add_argument(
-        '--dataset',
-        dest='dataset',
-        help='training dataset',
-        default='coco')
-    parser.add_argument(
-        '--net',
-        dest='net',
-        help='res50, res101, res152',
-        default='res50')
+        '--dataset', required=True,
+        help='training dataset')
 
     parser.add_argument(
-        '--cfg',
-        dest='cfg_file',
+        '--cfg', dest='cfg_file', required=True,
         help='optional config file')
     parser.add_argument(
-        '--set',
-        dest='set_cfgs',
+        '--set', dest='set_cfgs',
         help='set config keys, will overwrite config in the cfg_file',
-        default=[],
-        nargs=argparse.REMAINDER)
+        default=[], nargs='+')
 
     parser.add_argument(
         '--no_cuda', dest='cuda', help='whether use CUDA', action='store_false')
@@ -100,9 +89,7 @@ def main():
     else:
         raise ValueError('Unexpected dataset name: {}'.format(args.dataset))
 
-    if args.cfg_file is None:
-        args.cfg_file = "cfgs/{}_mask.yml".format(args.net)
-    print('cfg file: {}'.format(args.cfg_file))
+    print('load cfg from file: {}'.format(args.cfg_file))
     cfg_from_file(args.cfg_file)
 
     if args.set_cfgs is not None:
@@ -110,9 +97,7 @@ def main():
 
     assert args.load_ckpt or args.load_detectron
     cfg.RESNETS.IMAGENET_PRETRAINED = False  # Don't need to load imagenet pretrained weights
-
-    # print('Using config:')
-    # pprint.pprint(cfg)
+    assert_and_infer_cfg()
 
     maskRCNN = Generalized_RCNN(train=False)
 
@@ -126,18 +111,7 @@ def main():
 
     if args.load_detectron:
         print("loading detectron weights %s" % args.load_detectron)
-        if args.net == 'res50':
-            load_detectron_weight(maskRCNN, args.load_detectron)
-        else:
-            raise NotImplementedError
-
-        # mimic the Detectron affinechannel op
-        def set_bn_stats(m):
-            if isinstance(m, nn.BatchNorm2d):
-                nn.init.constant(m.running_mean, 0)
-                nn.init.constant(m.running_var, 1)
-
-        maskRCNN.apply(set_bn_stats)
+        load_detectron_weight(maskRCNN, args.load_detectron)
 
     if args.cuda:
         maskRCNN.cuda()

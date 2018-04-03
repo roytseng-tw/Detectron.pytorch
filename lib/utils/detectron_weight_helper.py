@@ -6,7 +6,6 @@ import re
 import torch
 
 
-
 def load_detectron_weight(net, detectron_weight_file):
     name_mapping, orphan_in_detectron = net.detectron_weight_mapping()
 

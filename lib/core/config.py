@@ -19,49 +19,24 @@ __C = AttrDict()
 #   from fast_rcnn_config import cfg
 cfg = __C
 
-#
+
+# Random note: avoid using '.ON' as a config key since yaml converts it to True;
+# prefer 'ENABLED' instead
+
+# ---------------------------------------------------------------------------- #
 # Training options
-#
+# ---------------------------------------------------------------------------- #
 __C.TRAIN = AttrDict()
 
-# Initial learning rate
-__C.TRAIN.LEARNING_RATE = 0.001
+# Datasets to train on
+# Available dataset list: datasets.dataset_catalog.DATASETS.keys()
+# If multiple datasets are listed, the model is trained on their union
+__C.TRAIN.DATASETS = ()
 
-# Momentum
-__C.TRAIN.MOMENTUM = 0.9
-
-# Weight decay, for regularization
-__C.TRAIN.WEIGHT_DECAY = 0.0005
-
-# Factor for reducing the learning rate
-__C.TRAIN.GAMMA = 0.1
-
-# Step size for reducing the learning rate, currently only support one step
-__C.TRAIN.STEPSIZE = [30000]
-
-# Iteration intervals for showing the loss during training, on command line interface
-__C.TRAIN.DISPLAY = 10
-
-# Whether to double the learning rate for bias
-__C.TRAIN.DOUBLE_BIAS = True
-
-# Whether to initialize the weights with truncated normal distribution
-__C.TRAIN.TRUNCATED = False
-
-# Whether to have weight decay on bias as well
-__C.TRAIN.BIAS_DECAY = False
-
-# Whether to add ground truth boxes to the pool when sampling regions
-__C.TRAIN.USE_GT = False
-
-# The number of snapshots kept, older ones are deleted to save space
-__C.TRAIN.SNAPSHOT_KEPT = 3
-
-# The time interval for saving tensorflow summaries
-__C.TRAIN.SUMMARY_INTERVAL = 180
-
-# Scale to use during training (can list multiple scales)
-# The scale is the pixel size of an image's shortest side
+# Scales to use during training
+# Each scale is the pixel size of an image's shortest side
+# If multiple scales are listed, then one is selected uniformly at random for
+# each training image (i.e., scale jitter data augmentation)
 __C.TRAIN.SCALES = (600, )
 
 # Max pixel size of the longest side of a scaled input image
@@ -95,24 +70,21 @@ __C.TRAIN.BG_THRESH_LO = 0.0
 # Use horizontally-flipped images during training?
 __C.TRAIN.USE_FLIPPED = True
 
-# Train bounding-box regressors
-__C.TRAIN.BBOX_REG = True
-
 # Overlap required between a ROI and ground-truth box in order for that ROI to
 # be used as a bounding-box regression training example
 __C.TRAIN.BBOX_THRESH = 0.5
 
-# Iterations between snapshots
-__C.TRAIN.SNAPSHOT_ITERS = 5000
+# Train using these proposals
+# During training, all proposals specified in the file are used (no limit is
+# applied)
+# Proposal files must be in correspondence with the datasets listed in
+# TRAIN.DATASETS
+__C.TRAIN.PROPOSAL_FILES = ()
 
-# solver.prototxt specifies the snapshot path prefix, this adds an optional
-# infix to yield the path: <prefix>[_<infix>]_iters_XYZ.caffemodel
-__C.TRAIN.SNAPSHOT_PREFIX = 'res101_faster_rcnn'
-# __C.TRAIN.SNAPSHOT_INFIX = ''
-
-# Use a prefetch thread in roi_data_layer.layer
-# So far I haven't found this useful; likely more engineering work is required
-# __C.TRAIN.USE_PREFETCH = False
+# Snapshot (model checkpoint) period
+# Divide by NUM_GPUS to determine actual period (e.g., 20000/8 => 2500 iters)
+# to allow for linear training schedule scaling
+__C.TRAIN.SNAPSHOT_ITERS = 20000
 
 # Normalize the targets (subtract empirical mean, divide by empirical stddev)
 __C.TRAIN.BBOX_NORMALIZE_TARGETS = True
@@ -124,9 +96,6 @@ __C.TRAIN.BBOX_NORMALIZE_TARGETS_PRECOMPUTED = False
 __C.TRAIN.BBOX_NORMALIZE_MEANS = (0.0, 0.0, 0.0, 0.0)
 __C.TRAIN.BBOX_NORMALIZE_STDS = (0.1, 0.1, 0.2, 0.2)
 
-# Train using these proposals
-__C.TRAIN.PROPOSAL_METHOD = 'gt'
-
 # Make minibatches from images that have similar aspect ratios (i.e. both
 # tall and thin or both short and wide)
 # This feature is critical for saving memory (and makes training slightly
@@ -135,46 +104,48 @@ __C.TRAIN.ASPECT_GROUPING = True
 
 # Crop images that have too small or too large aspect ratio
 __C.TRAIN.ASPECT_CROPPING = False
+__C.TRAIN.ASPECT_HI = 2
+__C.TRAIN.ASPECT_LO = 0.5
 
-# Use RPN to detect objects
-__C.TRAIN.HAS_RPN = True
-# IOU >= thresh: positive example
+# ---------------------------------------------------------------------------- #
+# RPN training options
+# ---------------------------------------------------------------------------- #
+
+# Minimum overlap required between an anchor and ground-truth box for the
+# (anchor, gt box) pair to be a positive example (IOU >= thresh ==> positive RPN
+# example)
 __C.TRAIN.RPN_POSITIVE_OVERLAP = 0.7
-# IOU < thresh: negative example
+
+# Maximum overlap allowed between an anchor and ground-truth box for the
+# (anchor, gt box) pair to be a negative examples (IOU < thresh ==> negative RPN
+# example)
 __C.TRAIN.RPN_NEGATIVE_OVERLAP = 0.3
-# If an anchor statisfied by positive and negative conditions set to negative
-__C.TRAIN.RPN_CLOBBER_POSITIVES = False
-# Max number of foreground examples
+
+# Target fraction of foreground (positive) examples per RPN minibatch
 __C.TRAIN.RPN_FG_FRACTION = 0.5
-# Total number of examples (deprecated)
-__C.TRAIN.RPN_BATCHSIZE = 256
+
 # Total number of RPN examples per image
 __C.TRAIN.RPN_BATCH_SIZE_PER_IM = 256
-# NMS threshold used on RPN proposals
+
+# NMS threshold used on RPN proposals (used during end-to-end training with RPN)
 __C.TRAIN.RPN_NMS_THRESH = 0.7
-# Number of top scoring boxes to keep before apply NMS to RPN proposals
+
+# Number of top scoring RPN proposals to keep before applying NMS
+# When FPN is used, this is *per FPN level* (not total)
 __C.TRAIN.RPN_PRE_NMS_TOP_N = 12000
-# Number of top scoring boxes to keep after applying NMS to RPN proposals
+
+# Number of top scoring RPN proposals to keep after applying NMS
+# This is the total number of RPN proposals produced (for both FPN and non-FPN
+# cases)
 __C.TRAIN.RPN_POST_NMS_TOP_N = 2000
 
 # Remove RPN anchors that go outside the image by RPN_STRADDLE_THRESH pixels
 # Set to -1 or a large value, e.g. 100000, to disable pruning anchors
 __C.TRAIN.RPN_STRADDLE_THRESH = 0
 
-# Proposal height and width both need to be greater than RPN_MIN_SIZE (at orig image scale)
-__C.TRAIN.RPN_MIN_SIZE = 8
-# Deprecated (outside weights)
-__C.TRAIN.RPN_BBOX_INSIDE_WEIGHTS = (1.0, 1.0, 1.0, 1.0)
-# Give the positive RPN examples weight of p * 1 / {num positives}
-# and give negatives a weight of (1 - p)
-# Set to -1.0 to use uniform example weighting
-__C.TRAIN.RPN_POSITIVE_WEIGHT = -1.0
-# Whether to use all ground truth bounding boxes for training,
-# For COCO, setting USE_ALL_GT to False will exclude boxes that are flagged as ''iscrowd''
-__C.TRAIN.USE_ALL_GT = True
-
-# Whether to tune the batch normalization parameters during training
-__C.TRAIN.BN_TRAIN = False
+# Proposal height and width both need to be greater than RPN_MIN_SIZE
+# (at orig image scale; not scale used during training or inference)
+__C.TRAIN.RPN_MIN_SIZE = 0
 
 # Filter proposals that are inside of crowd regions by CROWD_FILTER_THRESH
 # "Inside" is measured as: proposal-with-crowd intersection area divided by
@@ -184,10 +155,18 @@ __C.TRAIN.CROWD_FILTER_THRESH = 0.7
 # Ignore ground-truth objects with area < this threshold
 __C.TRAIN.GT_MIN_AREA = -1
 
-#
-# Testing options
-#
+# Freeze the backbone architecture during training if set to True
+__C.TRAIN.FREEZE_CONV_BODY = False
+
+# ---------------------------------------------------------------------------- #
+# Inference ('test') options
+# ---------------------------------------------------------------------------- #
 __C.TEST = AttrDict()
+
+# Datasets to test on
+# Available dataset list: datasets.dataset_catalog.DATASETS.keys()
+# If multiple datasets are listed, testing is performed on each one sequentially
+__C.TEST.DATASETS = ()
 
 # Scale to use during testing (can NOT list multiple scales)
 # The scale is the pixel size of an image's shortest side
@@ -200,45 +179,54 @@ __C.TEST.MAX_SIZE = 1000
 # IoU >= this threshold)
 __C.TEST.NMS = 0.3
 
-# Experimental: treat the (K+1) units in the cls_score layer as linear
-# predictors (trained, eg, with one-vs-rest SVMs).
-__C.TEST.SVM = False
-
-# Test using bounding-box regressors
+# Apply Fast R-CNN style bounding-box regression if True
 __C.TEST.BBOX_REG = True
 
-# Propose boxes
-__C.TEST.HAS_RPN = False
+# Test using these proposal files (must correspond with TEST.DATASETS)
+__C.TEST.PROPOSAL_FILES = ()
 
-# Test using these proposals
-__C.TEST.PROPOSAL_METHOD = 'gt'
+# Limit on the number of proposals per image used during inference
+__C.TEST.PROPOSAL_LIMIT = 2000
 
 ## NMS threshold used on RPN proposals
 __C.TEST.RPN_NMS_THRESH = 0.7
-## Number of top scoring boxes to keep before apply NMS to RPN proposals
-__C.TEST.RPN_PRE_NMS_TOP_N = 6000
 
-## Number of top scoring boxes to keep after applying NMS to RPN proposals
-__C.TEST.RPN_POST_NMS_TOP_N = 1000
+# Number of top scoring RPN proposals to keep before applying NMS
+# When FPN is used, this is *per FPN level* (not total)
+__C.TEST.RPN_PRE_NMS_TOP_N = 12000
 
-# Proposal height and width both need to be greater than RPN_MIN_SIZE (at orig image scale)
-__C.TEST.RPN_MIN_SIZE = 16
+# Number of top scoring RPN proposals to keep after applying NMS
+# This is the total number of RPN proposals produced (for both FPN and non-FPN
+# cases)
+__C.TEST.RPN_POST_NMS_TOP_N = 2000
 
-# Testing mode, default to be 'nms', 'top' is slower but better
-# See report for details
-__C.TEST.MODE = 'nms'
+# Proposal height and width both need to be greater than RPN_MIN_SIZE
+# (at orig image scale; not scale used during training or inference)
+__C.TEST.RPN_MIN_SIZE = 0
 
-# Only useful when TEST.MODE is 'top', specifies the number of top proposals to select
-__C.TEST.RPN_TOP_N = 5000
+# Maximum number of detections to return per image (100 is based on the limit
+# established for the COCO dataset)
+__C.TEST.DETECTIONS_PER_IM = 100
 
 # Minimum score threshold (assuming scores in a [0, 1] range); a value chosen to
 # balance obtaining high recall with not having too many low precision
 # detections that will slow down inference post processing steps (like NMS)
 __C.TEST.SCORE_THRESH = 0.05
 
-# Maximum number of detections to return per image (100 is based on the limit
-# established for the COCO dataset)
-__C.TEST.DETECTIONS_PER_IM = 100
+# Save detection results files if True
+# If false, results files are cleaned up (they can be large) after local
+# evaluation
+__C.TEST.COMPETITION_MODE = True
+
+# Evaluate detections with the COCO json dataset eval code even if it's not the
+# evaluation code for the dataset (e.g. evaluate PASCAL VOC results using the
+# COCO API to get COCO style AP on PASCAL VOC)
+__C.TEST.FORCE_JSON_DATASET_EVAL = False
+
+# [Inferred value; do not set directly in a config]
+# Indicates if precomputed proposals are used at test time
+# Not set for 1-stage models and 2-stage models with RPN subnetwork enabled
+__C.TEST.PRECOMPUTED_PROPOSALS = True
 
 # ---------------------------------------------------------------------------- #
 # Soft NMS
@@ -272,100 +260,6 @@ __C.TEST.BBOX_VOTE.SCORING_METHOD = 'ID'
 # different methods)
 __C.TEST.BBOX_VOTE.SCORING_METHOD_BETA = 1.0
 
-
-#
-# MobileNet options
-#
-
-__C.MOBILENET = AttrDict()
-
-# Whether to regularize the depth-wise filters during training
-__C.MOBILENET.REGU_DEPTH = False
-
-# Number of fixed layers during training, by default the first of all 14 layers is fixed
-# Range: 0 (none) to 12 (all)
-__C.MOBILENET.FIXED_LAYERS = 5
-
-# Weight decay for the mobilenet weights
-__C.MOBILENET.WEIGHT_DECAY = 0.00004
-
-# Depth multiplier
-__C.MOBILENET.DEPTH_MULTIPLIER = 1.
-
-# ---------------------------------------------------------------------------- #
-# MISC options
-# ---------------------------------------------------------------------------- #
-
-# Number of GPUs to use (applies to both training and testing)
-__C.NUM_GPUS = 1
-
-# The mapping from image coordinates to feature map coordinates might cause
-# some boxes that are distinct in image space to become identical in feature
-# coordinates. If DEDUP_BOXES > 0, then DEDUP_BOXES is used as the scale factor
-# for identifying duplicate boxes.
-# 1/16 is correct for {Alex,Caffe}Net, VGG_CNN_M_1024, and VGG16
-__C.DEDUP_BOXES = 1. / 16.
-
-# Clip bounding box transformation predictions to prevent np.exp from
-# overflowing
-# Heuristic choice based on that would scale a 16 pixel anchor up to 1000 pixels
-__C.BBOX_XFORM_CLIP = np.log(1000. / 16.)
-
-# Pixel mean values (BGR order) as a (1, 1, 3) array
-# We use the same pixel mean for all networks even though it's not exactly what
-# they were trained with
-# "Fun" fact: the history of where these values comes from is lost (From Detectron lol)
-__C.PIXEL_MEANS = np.array([[[102.9801, 115.9465, 122.7717]]])
-
-# For reproducibility
-__C.RNG_SEED = 3
-
-# A small number that's used many times
-__C.EPS = 1e-14
-
-# Root directory of project
-__C.ROOT_DIR = osp.abspath(osp.join(osp.dirname(__file__), '..', '..'))
-
-# Data directory
-__C.DATA_DIR = osp.abspath(osp.join(__C.ROOT_DIR, 'data'))
-
-# Name (or path to) the matlab executable
-__C.MATLAB = 'matlab'
-
-# Place outputs under an experiments directory
-__C.EXP_DIR = 'default'
-
-# Use GPU implementation of non-maximum suppression
-__C.USE_GPU_NMS = True
-
-# Default GPU device id
-__C.GPU_ID = 0
-
-__C.POOLING_MODE = 'crop'
-
-# Size of the pooled region after RoI pooling
-__C.POOLING_SIZE = 7
-
-# Maximal number of gt rois in an image during Training
-__C.MAX_NUM_GT_BOXES = 20
-
-# Anchor scales for RPN
-__C.ANCHOR_SCALES = [8, 16, 32]
-
-# Anchor ratios for RPN
-__C.ANCHOR_RATIOS = [0.5, 1, 2]
-
-# Feature stride for RPN
-__C.FEAT_STRIDE = [
-    16,
-]
-
-__C.CUDA = False
-
-__C.CROP_RESIZE_WITH_MAX_POOL = True
-
-# Train or Inference. This affect the model construction !!!
-__C.IS_TRAIN = True
 
 # ---------------------------------------------------------------------------- #
 # Model options
@@ -419,10 +313,193 @@ __C.MODEL.RPN_ONLY = False
 # Indicate whether the res5 stage forward computation is shared or not on training
 __C.MODEL.SHARE_RES5 = False
 
+
+# ---------------------------------------------------------------------------- #
+# RetinaNet options
+# ---------------------------------------------------------------------------- #
+__C.RETINANET = AttrDict()
+
+# RetinaNet is used (instead of Fast/er/Mask R-CNN/R-FCN/RPN) if True
+__C.RETINANET.RETINANET_ON = False
+
+# Anchor aspect ratios to use
+__C.RETINANET.ASPECT_RATIOS = (0.5, 1.0, 2.0)
+
+# Anchor scales per octave
+__C.RETINANET.SCALES_PER_OCTAVE = 3
+
+# At each FPN level, we generate anchors based on their scale, aspect_ratio,
+# stride of the level, and we multiply the resulting anchor by ANCHOR_SCALE
+__C.RETINANET.ANCHOR_SCALE = 4
+
+# Convolutions to use in the cls and bbox tower
+# NOTE: this doesn't include the last conv for logits
+__C.RETINANET.NUM_CONVS = 4
+
+# Weight for bbox_regression loss
+__C.RETINANET.BBOX_REG_WEIGHT = 1.0
+
+# Smooth L1 loss beta for bbox regression
+__C.RETINANET.BBOX_REG_BETA = 0.11
+
+# During inference, #locs to select based on cls score before NMS is performed
+# per FPN level
+__C.RETINANET.PRE_NMS_TOP_N = 1000
+
+# IoU overlap ratio for labeling an anchor as positive
+# Anchors with >= iou overlap are labeled positive
+__C.RETINANET.POSITIVE_OVERLAP = 0.5
+
+# IoU overlap ratio for labeling an anchor as negative
+# Anchors with < iou overlap are labeled negative
+__C.RETINANET.NEGATIVE_OVERLAP = 0.4
+
+# Focal loss parameter: alpha
+__C.RETINANET.LOSS_ALPHA = 0.25
+
+# Focal loss parameter: gamma
+__C.RETINANET.LOSS_GAMMA = 2.0
+
+# Prior prob for the positives at the beginning of training. This is used to set
+# the bias init for the logits layer
+__C.RETINANET.PRIOR_PROB = 0.01
+
+# Whether classification and bbox branch tower should be shared or not
+__C.RETINANET.SHARE_CLS_BBOX_TOWER = False
+
+# Use class specific bounding box regression instead of the default class
+# agnostic regression
+__C.RETINANET.CLASS_SPECIFIC_BBOX = False
+
+# Whether softmax should be used in classification branch training
+__C.RETINANET.SOFTMAX = False
+
+# Inference cls score threshold, anchors with score > INFERENCE_TH are
+# considered for inference
+__C.RETINANET.INFERENCE_TH = 0.05
+
+
+# ---------------------------------------------------------------------------- #
+# Solver options
+# Note: all solver options are used exactly as specified; the implication is
+# that if you switch from training on 1 GPU to N GPUs, you MUST adjust the
+# solver configuration accordingly. We suggest using gradual warmup and the
+# linear learning rate scaling rule as described in
+# "Accurate, Large Minibatch SGD: Training ImageNet in 1 Hour" Goyal et al.
+# https://arxiv.org/abs/1706.02677
+# ---------------------------------------------------------------------------- #
+__C.SOLVER = AttrDict()
+
+# e.g 'SGD', 'Adam'
+__C.SOLVER.TYPE = 'SGD'
+
+# Base learning rate for the specified schedule
+__C.SOLVER.BASE_LR = 0.001
+
+# Schedule type (see functions in utils.lr_policy for options)
+# E.g., 'step', 'steps_with_decay', ...
+__C.SOLVER.LR_POLICY = 'step'
+
+# Some LR Policies (by example):
+# 'step'
+#   lr = SOLVER.BASE_LR * SOLVER.GAMMA ** (cur_iter // SOLVER.STEP_SIZE)
+# 'steps_with_decay'
+#   SOLVER.STEPS = [0, 60000, 80000]
+#   SOLVER.GAMMA = 0.1
+#   lr = SOLVER.BASE_LR * SOLVER.GAMMA ** current_step
+#   iters [0, 59999] are in current_step = 0, iters [60000, 79999] are in
+#   current_step = 1, and so on
+# 'steps_with_lrs'
+#   SOLVER.STEPS = [0, 60000, 80000]
+#   SOLVER.LRS = [0.02, 0.002, 0.0002]
+#   lr = LRS[current_step]
+
+# Hyperparameter used by the specified policy
+# For 'step', the current LR is multiplied by SOLVER.GAMMA at each step
+__C.SOLVER.GAMMA = 0.1
+
+# Uniform step size for 'steps' policy
+__C.SOLVER.STEP_SIZE = 30000
+
+# Non-uniform step iterations for 'steps_with_decay' or 'steps_with_lrs'
+# policies
+__C.SOLVER.STEPS = []
+
+# Learning rates to use with 'steps_with_lrs' policy
+__C.SOLVER.LRS = []
+
+# Maximum number of SGD iterations
+__C.SOLVER.MAX_ITER = 40000
+
+# Momentum to use with SGD
+__C.SOLVER.MOMENTUM = 0.9
+
+# L2 regularization hyperparameter
+__C.SOLVER.WEIGHT_DECAY = 0.0005
+
+# Whether to double the learning rate for bias
+__C.SOLVER.BIAS_DOUBLE_LR = True
+
+# Whether to have weight decay on bias as well
+__C.SOLVER.BIAS_WEIGHT_DECAY = False
+
+# Warm up to SOLVER.BASE_LR over this number of SGD iterations
+__C.SOLVER.WARM_UP_ITERS = 500
+
+# Start the warm up from SOLVER.BASE_LR * SOLVER.WARM_UP_FACTOR
+__C.SOLVER.WARM_UP_FACTOR = 1.0 / 3.0
+
+# WARM_UP_METHOD can be either 'constant' or 'linear' (i.e., gradual)
+__C.SOLVER.WARM_UP_METHOD = 'linear'
+
+# Scale the momentum update history by new_lr / old_lr when updating the
+# learning rate (this is correct given MomentumSGDUpdateOp)
+__C.SOLVER.SCALE_MOMENTUM = True
+# Only apply the correction if the relative LR change exceeds this threshold
+# (prevents ever change in linear warm up from scaling the momentum by a tiny
+# amount; momentum scaling is only important if the LR change is large)
+__C.SOLVER.SCALE_MOMENTUM_THRESHOLD = 1.1
+
+# Suppress logging of changes to LR unless the relative change exceeds this
+# threshold (prevents linear warm up from spamming the training log)
+__C.SOLVER.LOG_LR_CHANGE_THRESHOLD = 1.1
+
+
+# ---------------------------------------------------------------------------- #
+# Fast R-CNN options
+# ---------------------------------------------------------------------------- #
+__C.FAST_RCNN = AttrDict()
+
+# The type of RoI head to use for bounding box classification and regression
+# The string must match a function this is imported in modeling.model_builder
+# (e.g., 'head_builder.add_roi_2mlp_head' to specify a two hidden layer MLP)
+__C.FAST_RCNN.ROI_BOX_HEAD = ''
+
+# Hidden layer dimension when using an MLP for the RoI box head
+__C.FAST_RCNN.MLP_HEAD_DIM = 1024
+
+# RoI transformation function (e.g., RoIPool or RoIAlign)
+# (RoIPoolF is the same as RoIPool; ignore the trailing 'F')
+__C.FAST_RCNN.ROI_XFORM_METHOD = 'RoIPoolF'
+
+# Number of grid sampling points in RoIAlign (usually use 2)
+# Only applies to RoIAlign
+__C.FAST_RCNN.ROI_XFORM_SAMPLING_RATIO = 0
+
+# RoI transform output resolution
+# Note: some models may have constraints on what they can use, e.g. they use
+# pretrained FC layers like in VGG16, and will ignore this option
+__C.FAST_RCNN.ROI_XFORM_RESOLUTION = 14
+
+
 # ---------------------------------------------------------------------------- #
 # RPN options
 # ---------------------------------------------------------------------------- #
 __C.RPN = AttrDict()
+
+# [Infered value; do not set directly in a config]
+# Indicates that the model contains an RPN subnetwork
+__C.RPN.RPN_ON = False
 
 # `True` for Detectron implementation. `False` for jwyang's implementation.
 __C.RPN.OUT_DIM_AS_IN_DIM = True
@@ -496,42 +573,27 @@ __C.FPN.EXTRA_CONV_LEVELS = False
 
 
 # ---------------------------------------------------------------------------- #
-# Fast R-CNN options
-# ---------------------------------------------------------------------------- #
-__C.FAST_RCNN = AttrDict()
-
-# The type of RoI head to use for bounding box classification and regression
-# The string must match a function this is imported in modeling.model_builder
-# (e.g., 'head_builder.add_roi_2mlp_head' to specify a two hidden layer MLP)
-__C.FAST_RCNN.ROI_BOX_HEAD = ''
-
-# Hidden layer dimension when using an MLP for the RoI box head
-__C.FAST_RCNN.MLP_HEAD_DIM = 1024
-
-# RoI transformation function (e.g., RoIPool or RoIAlign)
-# (RoIPoolF is the same as RoIPool; ignore the trailing 'F')
-__C.FAST_RCNN.ROI_XFORM_METHOD = b'RoIPoolF'
-
-# Number of grid sampling points in RoIAlign (usually use 2)
-# Only applies to RoIAlign
-__C.FAST_RCNN.ROI_XFORM_SAMPLING_RATIO = 0
-
-# RoI transform output resolution
-# Note: some models may have constraints on what they can use, e.g. they use
-# pretrained FC layers like in VGG16, and will ignore this option
-__C.FAST_RCNN.ROI_XFORM_RESOLUTION = 14
-
-# ---------------------------------------------------------------------------- #
 # Mask R-CNN options ("MRCNN" means Mask R-CNN)
 # ---------------------------------------------------------------------------- #
 __C.MRCNN = AttrDict()
 
+# The type of RoI head to use for instance mask prediction
+# The string must match a function this is imported in modeling.model_builder
+# (e.g., 'mask_rcnn_heads.ResNet_mask_rcnn_fcn_head_v1up4convs')
 __C.MRCNN.ROI_MASK_HEAD = ''
-
-__C.MRCNN.MEMORY_EFFICIENT_LOSS = True
 
 # Resolution of mask predictions
 __C.MRCNN.RESOLUTION = 14
+
+# RoI transformation function and associated options
+__C.MRCNN.ROI_XFORM_METHOD = 'RoIAlign'
+
+# RoI transformation function (e.g., RoIPool or RoIAlign)
+__C.MRCNN.ROI_XFORM_RESOLUTION = 7
+
+# Number of grid sampling points in RoIAlign (usually use 2)
+# Only applies to RoIAlign
+__C.MRCNN.ROI_XFORM_SAMPLING_RATIO = 0
 
 # Number of channels in the mask head
 __C.MRCNN.DIM_REDUCED = 256
@@ -541,6 +603,9 @@ __C.MRCNN.DILATION = 2
 
 # Upsample the predicted masks by this factor
 __C.MRCNN.UPSAMPLE_RATIO = 1
+
+# Use a fully-connected layer to predict the final masks instead of a conv layer
+__C.MRCNN.USE_FC_OUTPUT = False
 
 # Weight initialization method for the mask head and mask output layers. ['GaussianFill', 'MSRAFill']
 __C.MRCNN.CONV_INIT = 'GaussianFill'
@@ -552,12 +617,42 @@ __C.MRCNN.CLS_SPECIFIC_MASK = True
 # Binarization threshold for converting soft masks to hard masks
 __C.MRCNN.THRESH_BINARIZE = 0.5
 
+__C.MRCNN.MEMORY_EFFICIENT_LOSS = True  # TODO
+
+
 # ---------------------------------------------------------------------------- #
 # Keyoint Mask R-CNN options ("KRCNN" = Mask R-CNN with Keypoint support)
 # ---------------------------------------------------------------------------- #
 __C.KRCNN = AttrDict()
 
+# The type of RoI head to use for instance keypoint prediction
+# The string must match a function this is imported in modeling.model_builder
+# (e.g., 'keypoint_rcnn_heads.add_roi_pose_head_v1convX')
 __C.KRCNN.ROI_KEYPOINTS_HEAD = ''
+
+# Output size (and size loss is computed on), e.g., 56x56
+__C.KRCNN.HEATMAP_SIZE = -1
+
+# Number of keypoints in the dataset (e.g., 17 for COCO)
+__C.KRCNN.NUM_KEYPOINTS = -1
+
+# Use bilinear interpolation to upsample the final heatmap by this factor
+__C.KRCNN.UP_SCALE = -1
+
+# Apply a ConvTranspose layer to the hidden representation computed by the
+# keypoint head prior to predicting the per-keypoint heatmaps
+__C.KRCNN.USE_DECONV = False
+# Channel dimension of the hidden representation produced by the ConvTranspose
+__C.KRCNN.DECONV_DIM = 256
+
+# Use a ConvTranspose layer to predict the per-keypoint heatmaps
+__C.KRCNN.USE_DECONV_OUTPUT = False
+
+# Use dilation in the keypoint head
+__C.KRCNN.DILATION = 1
+
+# Size of the kernels to use in all ConvTranspose operations
+__C.KRCNN.DECONV_KERNEL = 4
 
 # Number of keypoints in the dataset (e.g., 17 for COCO)
 __C.KRCNN.NUM_KEYPOINTS = -1
@@ -565,17 +660,73 @@ __C.KRCNN.NUM_KEYPOINTS = -1
 # Number of stacked Conv layers in keypoint head
 __C.KRCNN.NUM_STACKED_CONVS = 8
 
-# Output size (and size loss is computed on), e.g., 56x56
-__C.KRCNN.HEATMAP_SIZE = -1
+# Dimension of the hidden representation output by the keypoint head
+__C.KRCNN.CONV_HEAD_DIM = 256
+
+# Conv kernel size used in the keypoint head
+__C.KRCNN.CONV_HEAD_KERNEL = 3
+# Conv kernel weight filling function
+__C.KRCNN.CONV_INIT = 'GaussianFill'
+
+# Use NMS based on OKS if True
+__C.KRCNN.NMS_OKS = False
+
+# Source of keypoint confidence
+#   Valid options: ('bbox', 'logit', 'prob')
+__C.KRCNN.KEYPOINT_CONFIDENCE = 'bbox'
+
+# Standard ROI XFORM options (see FAST_RCNN or MRCNN options)
+__C.KRCNN.ROI_XFORM_METHOD = 'RoIAlign'
+__C.KRCNN.ROI_XFORM_RESOLUTION = 7
+__C.KRCNN.ROI_XFORM_SAMPLING_RATIO = 0
+
+# Minimum number of labeled keypoints that must exist in a minibatch (otherwise
+# the minibatch is discarded)
+__C.KRCNN.MIN_KEYPOINT_COUNT_FOR_VALID_MINIBATCH = 20
+
+# When infering the keypoint locations from the heatmap, don't scale the heatmap
+# below this minimum size
+__C.KRCNN.INFERENCE_MIN_SIZE = 0
+
+# Multi-task loss weight to use for keypoints
+# Recommended values:
+#   - use 1.0 if KRCNN.NORMALIZE_BY_VISIBLE_KEYPOINTS is True
+#   - use 4.0 if KRCNN.NORMALIZE_BY_VISIBLE_KEYPOINTS is False
+__C.KRCNN.LOSS_WEIGHT = 1.0
+
+# Normalize by the total number of visible keypoints in the minibatch if True.
+# Otherwise, normalize by the total number of keypoints that could ever exist
+# in the minibatch. See comments in modeling.model_builder.add_keypoint_losses
+# for detailed discussion.
+__C.KRCNN.NORMALIZE_BY_VISIBLE_KEYPOINTS = True
+
+
+# ---------------------------------------------------------------------------- #
+# R-FCN options
+# ---------------------------------------------------------------------------- #
+__C.RFCN = AttrDict()
+
+# Position-sensitive RoI pooling output grid size (height and width)
+__C.RFCN.PS_GRID_SIZE = 3
+
 
 # ---------------------------------------------------------------------------- #
 # ResNets options ("ResNets" = ResNet and ResNeXt)
 # ---------------------------------------------------------------------------- #
 __C.RESNETS = AttrDict()
 
+# Number of groups to use; 1 ==> ResNet; > 1 ==> ResNeXt
+__C.RESNETS.NUM_GROUPS = 1
+
+# Baseline width of each group
+__C.RESNETS.WIDTH_PER_GROUP = 64
+
 # Place the stride 2 conv on the 1x1 filter
 # Use True only for the original MSRA ResNet; use False for C2 and Torch models
 __C.RESNETS.STRIDE_1X1 = True
+
+# Residual transformation function
+__C.RESNETS.TRANS_FUNC = 'bottleneck_transformation'
 
 # Apply dilation in stage "res5"
 __C.RESNETS.RES5_DILATION = 1
@@ -588,56 +739,89 @@ __C.RESNETS.FREEZE_AT = 2
 # Whether to load pretrained weight with ImageNet
 __C.RESNETS.IMAGENET_PRETRAINED = True
 
-# ---------------------------------------------------------------------------- #
-# Deprecated options (old option from jwyang)
-# ---------------------------------------------------------------------------- #
-_DEPCRECATED_KEYS = set((
-    # 'ANCHOR_SCALES',
-    # 'ANCHOR_RATIOS',
-    # 'FEAT_STRIDE'
-))
 
 # ---------------------------------------------------------------------------- #
-# Renamed options (old option from jwyang)
+# MISC options
 # ---------------------------------------------------------------------------- #
-_RENAMED_KEYS = {
-    'EXAMPLE.RENAMED.KEY': 'EXAMPLE.KEY',  # Dummy example to follow
-    'TRAIN.BATCH_SIZE': 'TRAIN.BATCH_SIZE_PER_IM'
-}
+
+# Number of GPUs to use (applies to both training and testing)
+__C.NUM_GPUS = 1
+
+# The mapping from image coordinates to feature map coordinates might cause
+# some boxes that are distinct in image space to become identical in feature
+# coordinates. If DEDUP_BOXES > 0, then DEDUP_BOXES is used as the scale factor
+# for identifying duplicate boxes.
+# 1/16 is correct for {Alex,Caffe}Net, VGG_CNN_M_1024, and VGG16
+__C.DEDUP_BOXES = 1. / 16.
+
+# Clip bounding box transformation predictions to prevent np.exp from
+# overflowing
+# Heuristic choice based on that would scale a 16 pixel anchor up to 1000 pixels
+__C.BBOX_XFORM_CLIP = np.log(1000. / 16.)
+
+# Pixel mean values (BGR order) as a (1, 1, 3) array
+# We use the same pixel mean for all networks even though it's not exactly what
+# they were trained with
+# "Fun" fact: the history of where these values comes from is lost (From Detectron lol)
+__C.PIXEL_MEANS = np.array([[[102.9801, 115.9465, 122.7717]]])
+
+# For reproducibility
+__C.RNG_SEED = 3
+
+# A small number that's used many times
+__C.EPS = 1e-14
+
+# Root directory of project
+__C.ROOT_DIR = osp.abspath(osp.join(osp.dirname(__file__), '..', '..'))
+
+# Name (or path to) the matlab executable
+__C.MATLAB = 'matlab'
+
+# Dump detection visualizations
+__C.VIS = False
+
+# Score threshold for visualization
+__C.VIS_TH = 0.9
+
+# Expected results should take the form of a list of expectations, each
+# specified by four elements (dataset, task, metric, expected value). For
+# example: [['coco_2014_minival', 'box_proposal', 'AR@1000', 0.387]]
+__C.EXPECTED_RESULTS = []
+# Absolute and relative tolerance to use when comparing to EXPECTED_RESULTS
+__C.EXPECTED_RESULTS_RTOL = 0.1
+__C.EXPECTED_RESULTS_ATOL = 0.005
+# Set to send email in case of an EXPECTED_RESULTS failure
+__C.EXPECTED_RESULTS_EMAIL = b''
+
+# ------------------------------
+# Data directory
+__C.DATA_DIR = osp.abspath(osp.join(__C.ROOT_DIR, 'data'))
+
+__C.POOLING_MODE = 'crop'
+
+# Size of the pooled region after RoI pooling
+__C.POOLING_SIZE = 7
+
+__C.CROP_RESIZE_WITH_MAX_POOL = True
+
+# [Infered value]
+__C.CUDA = False
 
 
-def get_output_dir(imdb, weights_filename):
-    """Return the directory where experimental artifacts are placed.
-  If the directory does not exist, it is created.
-
-  A canonical path is built using the name from an imdb and a network
-  (if not None).
-  """
-    outdir = osp.abspath(
-        osp.join(__C.ROOT_DIR, 'output', __C.EXP_DIR, imdb.name))
-    if weights_filename is None:
-        weights_filename = 'default'
-    outdir = osp.join(outdir, weights_filename)
-    if not os.path.exists(outdir):
-        os.makedirs(outdir)
-    return outdir
-
-
-def get_output_tb_dir(imdb, weights_filename):
-    """Return the directory where tensorflow summaries are placed.
-  If the directory does not exist, it is created.
-
-  A canonical path is built using the name from an imdb and a network
-  (if not None).
-  """
-    outdir = osp.abspath(
-        osp.join(__C.ROOT_DIR, 'tensorboard', __C.EXP_DIR, imdb.name))
-    if weights_filename is None:
-        weights_filename = 'default'
-    outdir = osp.join(outdir, weights_filename)
-    if not os.path.exists(outdir):
-        os.makedirs(outdir)
-    return outdir
+def assert_and_infer_cfg(make_immutable=True):
+    """Call this function in your script after you have finished setting all cfg
+    values that are necessary (e.g., merging a config from a file, merging
+    command line config options, etc.). By default, this function will also
+    mark the global cfg as immutable to prevent changing the global cfg settings
+    during script execution (which can lead to hard to debug errors or code
+    that's harder to understand than is necessary).
+    """
+    if __C.MODEL.RPN_ONLY or __C.MODEL.FASTER_RCNN:
+        __C.RPN.RPN_ON = True
+    if __C.RPN.RPN_ON or __C.RETINANET.RETINANET_ON:
+        __C.TEST.PRECOMPUTED_PROPOSALS = False
+    if make_immutable:
+        cfg.immutable(True)
 
 
 def merge_cfg_from_file(cfg_filename):
@@ -772,4 +956,3 @@ def _check_and_coerce_cfg_value_type(value_a, value_b, key, full_key):
             'key: {}'.format(type_b, type_a, value_b, value_a, full_key)
         )
     return value_a
-

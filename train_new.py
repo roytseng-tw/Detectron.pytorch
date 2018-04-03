@@ -4,11 +4,13 @@ import argparse
 import distutils.util
 import os
 import sys
+import pickle
 import traceback
 import logging
 from collections import defaultdict
 
 import numpy as np
+import yaml
 import torch
 from torch.autograd import Variable
 import torch.nn as nn
@@ -17,172 +19,117 @@ cv2.setNumThreads(0)  # pytorch issue 1355: possible deadlock in dataloader
 
 import _init_paths  # pylint: disable=unused-import
 import nn as mynn
-from core.config import cfg, cfg_from_file, cfg_from_list
+import utils.net as net_utils
+import utils.misc as misc_utils
+from core.config import cfg, cfg_from_file, cfg_from_list, assert_and_infer_cfg
 from datasets_new.roidb import combined_roidb_for_training
 from roi_data.loader import RoiDataLoader, MinibatchSampler, collate_minibatch
 from modeling.model_builder import Generalized_RCNN
-from model.utils.net_utils import clip_gradient, adjust_learning_rate
 from utils.detectron_weight_helper import load_detectron_weight
 from utils.timer import Timer
-from utils.misc import get_run_name
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
 def parse_args():
-    """
-    Parse input arguments
-    """
-    parser = argparse.ArgumentParser(description='Train a Fast R-CNN network')
-    parser.add_argument(
-        '--dataset',
-        dest='dataset',
-        help='training dataset',
-        default='pascal_voc',
-        type=str)
-    parser.add_argument(
-        '--net',
-        dest='net',
-        help='vgg16, res101, res50 ...',
-        default='vgg16',
-        type=str)
-    parser.add_argument(
-        '--ls',
-        dest='large_scale',
-        help='whether use large imag scale',
-        action='store_true')
-    parser.add_argument(
-        '--cag',
-        dest='class_agnostic',
-        help='whether perform class_agnostic bbox regression',
-        action='store_true')
-    parser.add_argument(
-        '--set',
-        dest='set_cfgs',
-        help='set config keys',
-        default=[],
-        nargs=argparse.REMAINDER)
+    """Parse input arguments"""
+    parser = argparse.ArgumentParser(description='Train a X-RCNN network')
 
     parser.add_argument(
-        '--detectron_arch',
-        help='Use architecture settings as in detectron',
-        default=True,
-        type=distutils.util.strtobool)
+        '--dataset', dest='dataset', required=True,
+        help='Dataset to use')
+    parser.add_argument(
+        '--cfg', dest='cfg_file', required=True,
+        help='Config file for training (and optionally testing)')
+    parser.add_argument(
+        '--set', dest='set_cfgs',
+        help='Set config keys. Key value sequence seperate by whitespace.'
+             'e.g. [key] [value] [key] [value]',
+        default=[], nargs='+')
 
-    parser.add_argument(
-        '--save_dir',
-        dest='save_dir',
-        help='directory to save models',
-        default=os.path.join(os.environ['HOME'], "models"))
-    parser.add_argument(
-        '--ckpt_num_per_epoch',
-        help='number of checkpoints to save for each epoch. '
-        'Not include the one at the end of an epoch.',
-        default=3,
-        type=int)
-
-    parser.add_argument(
-        '--start_epoch',
-        dest='start_epoch',
-        help='starting epoch',
-        default=0,
-        type=int)
-    parser.add_argument(
-        '--epochs',
-        dest='num_epochs',
-        help='number of epochs to train',
-        default=10,
-        type=int)
     parser.add_argument(
         '--disp_interval',
-        dest='disp_interval',
-        help='number of iterations to display',
-        default=100,
+        help='Display training info every N iterations',
+        default=100, type=int)
+    parser.add_argument(
+        '--no_cuda', dest='cuda', help='Do not use CUDA device', action='store_false')
+
+    # Epoch
+    parser.add_argument(
+        '--start_epoch',
+        help='Starting epoch count. Epoch is 0-indexed.',
+        default=0, type=int)
+    parser.add_argument(
+        '--epochs', dest='num_epochs',
+        help='Number of epochs to train',
+        default=6, type=int)
+
+    # Optimization
+    # These options has the highest prioity and can overwrite the values in config file
+    # or values set by set_cfgs. `None` means do not overwrite.
+    parser.add_argument(
+        '--bs', dest='batch_size',
+        help='Explicitly specify to overwrite the value comed from cfg_file.',
         type=int)
+    parser.add_argument(
+        '--nw', dest='num_workers', help='number of worker to load data',
+        default=10, type=int)
 
     parser.add_argument(
-        '--bs', dest='batch_size', help='batch_size', default=1, type=int)
+        '--o', dest='optimizer', help='Training optimizer.',
+        default=None)
     parser.add_argument(
-        '--nw',
-        dest='num_workers',
-        help='number of worker to load data',
-        default=0,
-        type=int)
-    parser.add_argument(
-        '--no_cuda', dest='cuda', help='whether use CUDA', action='store_false')
-    parser.add_argument(
-        '--mGPUs',
-        dest='mGPUs',
-        help='whether use multiple GPUs',
-        action='store_true')
-
-    # config optimization
-    parser.add_argument(
-        '--o',
-        dest='optimizer',
-        help='training optimizer',
-        default="sgd",
-        type=str)
-    parser.add_argument(
-        '--lr',
-        dest='lr',
-        help='starting learning rate',
-        default=0.001,
-        type=float)
-    parser.add_argument(
-        '--lr_decay_step',
-        dest='lr_decay_step',
-        help='step to do learning rate decay, unit is epoch',
-        default=5,
-        type=int)
+        '--lr', help='Base learning rate.',
+        default=None, type=float)
     parser.add_argument(
         '--lr_decay_gamma',
-        dest='lr_decay_gamma',
-        help='learning rate decay ratio',
-        default=0.1,
-        type=float)
-
-    # set training session
+        help='Learning rate decay rate.',
+        default=None, type=float)
     parser.add_argument(
-        '--s',
-        dest='session',
-        help='training session, for recognization only. '
-        'Shown in terminal outputs.',
-        default=1,
-        type=int)
+        '--lr_decay_epochs',
+        help='Epochs to decay learning rate. Epoch is 0-indexed. '
+             'Decay on the start of epoch',
+        default=[4, 5], nargs='+', type=int)
 
-    # resume trained model TODO: add resume training mechanism
+    # Resume training TODO: add resume training mechanism
     parser.add_argument(
-        '--r',
-        dest='resume',
+        '--r', dest='resume',
         help='resume checkpoint or not',
         action='store_true')
     parser.add_argument('--checkrun', help='run name to load model')
     parser.add_argument('--checkepoch', help='epoch to load model', type=int)
     parser.add_argument('--checkstep', help='step to load model', type=int)
 
-    # load checkpoint
-    parser.add_argument('--load_ckpt', help='checkpoint path to load')
+    # Checkpoint and Logging
+    parser.add_argument(
+        '--output_base_dir',
+        help='Output base directory',
+        default="Outputs")
+
+    parser.add_argument(
+        '--no_save', help='do not save anything', action='store_true')
+
+    parser.add_argument(
+        '--ckpt_num_per_epoch',
+        help='number of checkpoints to save in each epoch. '
+             'Not include the one at the end of an epoch.',
+        default=3, type=int)
+
+    parser.add_argument(
+        '--load_ckpt', help='checkpoint path to load')
     parser.add_argument(
         '--load_detectron', help='path to the detectron weight pickle file')
 
-    # log and diaplay
     parser.add_argument(
-        '--use_tfboard',
-        dest='use_tfboard',
-        help='whether use tensorflow tensorboard',
-        action='store_true')
-
-    parser.add_argument(
-        '--no_save',
-        help='do not save anything',
+        '--use_tfboard', help='Use tensorflow tensorboard to log training info',
         action='store_true')
 
     return parser.parse_args()
 
 
 def save(output_dir, args, epoch, step, model, optimizer, iters_per_epoch):
+    """Save checkpoint"""
     if args.no_save:
         return
     ckpt_dir = os.path.join(output_dir, 'ckpt')
@@ -197,13 +144,12 @@ def save(output_dir, args, epoch, step, model, optimizer, iters_per_epoch):
         'iters_per_epoch': iters_per_epoch,
         'model': model.state_dict(),
         'optimizer': optimizer.state_dict(),
-        'pooling_mode': cfg.POOLING_MODE,
-        'class_agnostic': args.class_agnostic,
-    }, save_name)
+        'pooling_mode': cfg.POOLING_MODE}, save_name)
     print('save model: {}'.format(save_name))
 
 
 def main():
+    """Main function"""
     if not torch.cuda.is_available():
         sys.exit("Need a CUDA device to run the code.")
 
@@ -211,52 +157,53 @@ def main():
     print('Called with args:')
     print(args)
 
-    cfg.NUM_GPUS = torch.cuda.device_count()
-    assert (args.batch_size % cfg.NUM_GPUS) == 0, \
-        'batch_size: %d, NUM_GPUS: %d' % (args.batch_size, cfg.NUM_GPUS)
-    cfg.TRAIN.IMS_PER_BATCH = args.batch_size // cfg.NUM_GPUS
-    print('NUM_GPUs: %d, TRAIN.IMS_PER_BATCH: %d' % (cfg.NUM_GPUS, cfg.TRAIN.IMS_PER_BATCH))
-
     if args.cuda or cfg.NUM_GPUS > 0:
         cfg.CUDA = True
     else:
         raise ValueError("Need Cuda device to run !")
 
-    if cfg.NUM_GPUS > 1:
-        args.mGPUs = True
-
     if args.dataset == "coco2017":
-        args.train_datasets = ('coco_2017_train',)
-        args.train_proposal_files = ()
+        cfg.TRAIN.DATASETS = ('coco_2017_train',)
     else:
-        ValueError("Unexpect args.dataset value: {}".format(args.dataset))
+        raise ValueError("Unexpected args.dataset: {}".format(args.dataset))
 
-    if args.net == 'res50':
-        args.cfg_file = "cfgs/res50_mask.yml"
-    else:
-        raise ValueError("No config file yet.")
-
-    if args.cfg_file is not None:
-        cfg_from_file(args.cfg_file)
+    cfg_from_file(args.cfg_file)
     if args.set_cfgs is not None:
         cfg_from_list(args.set_cfgs)
 
-    # print('Using config:')
-    # pprint.pprint(cfg)
+    ### Adaptively adjust some configs ###
+    original_batch_size = cfg.NUM_GPUS * cfg.TRAIN.IMS_PER_BATCH
+    cfg.NUM_GPUS = torch.cuda.device_count()
+    assert (args.batch_size % cfg.NUM_GPUS) == 0, \
+        'batch_size: %d, NUM_GPUS: %d' % (args.batch_size, cfg.NUM_GPUS)
+    cfg.TRAIN.IMS_PER_BATCH = args.batch_size // cfg.NUM_GPUS
+    print('Batch size change from {} (in config file) to {}'.format(
+        original_batch_size, args.batch_size))
+    print('NUM_GPUs: %d, TRAIN.IMS_PER_BATCH: %d' % (cfg.NUM_GPUS, cfg.TRAIN.IMS_PER_BATCH))
 
-    assert len(cfg.TRAIN.SCALES) == 1, "Currently, only support single scale for data loading"
+    ### Adjust learning based on batch size change linearly
+    old_base_lr = cfg.SOLVER.BASE_LR
+    cfg.SOLVER.BASE_LR *= args.batch_size / original_batch_size
+    print('Adjust BASE_LR linearly according to batch size change: {} --> {}'.format(
+        old_base_lr, cfg.SOLVER.BASE_LR))
+
+    ### Overwrite some solver settings from command line arguments
+    if args.optimizer is not None:
+        cfg.SOLVER.TYPE = args.optimizer
+    if args.lr is not None:
+        cfg.SOLVER.BASE_LR = args.lr
+    if args.lr_decay_gamma is not None:
+        cfg.SOLVER.GAMMA = args.lr_decay_gamma
+
+    if cfg.NUM_GPUS > 1:
+        args.mGPUs = True
 
     timers = defaultdict(Timer)
 
-
     ### Dataset ###
-
-    cfg.TRAIN.USE_FLIPPED = True
-    cfg.USE_GPU_NMS = args.cuda
-
     timers['roidb'].tic()
     roidb, ratio_list, ratio_index, im_sizes_list = combined_roidb_for_training(
-        args.train_datasets, args.train_proposal_files)
+        cfg.TRAIN.DATASETS, cfg.TRAIN.PROPOSAL_FILES)
     timers['roidb'].toc()
     train_size = len(roidb)
     logger.info('{:d} roidb entries'.format(train_size))
@@ -273,11 +220,10 @@ def main():
         sampler=sampler,
         num_workers=args.num_workers,
         collate_fn=collate_minibatch)
-    data_iter = iter(dataloader)
 
+    assert_and_infer_cfg()
 
     ### Model ###
-
     maskRCNN = Generalized_RCNN(train=True)
 
     if args.load_ckpt:
@@ -292,13 +238,6 @@ def main():
         logging.info("loading Detectron weights %s", args.load_detectron)
         load_detectron_weight(maskRCNN, args.load_detectron)
 
-        # mimic the Detectron affinechannel op
-        def set_bn_stats(m):
-            if isinstance(m, nn.BatchNorm2d):
-                nn.init.constant(m.running_mean, 0)
-                nn.init.constant(m.running_var, 1)
-        maskRCNN.apply(set_bn_stats)
-
     if args.mGPUs:
         maskRCNN = mynn.DataParallel(maskRCNN, cpu_keywords=['im_info', 'roidb'],
                                      minibatch=True)
@@ -306,52 +245,67 @@ def main():
     if cfg.CUDA:
         maskRCNN.cuda()
 
-
     ### Optimizer ###
-
-    lr = cfg.TRAIN.LEARNING_RATE
-    lr = args.lr
-
-    params = []
+    bias_params = []
+    nonbias_params = []
     for key, value in dict(maskRCNN.named_parameters()).items():
         if value.requires_grad:
             if 'bias' in key:
-                params += [{'params': [value], 'lr': lr * (cfg.TRAIN.DOUBLE_BIAS + 1),
-                            'weight_decay': cfg.TRAIN.BIAS_DECAY and cfg.TRAIN.WEIGHT_DECAY or 0}]
+                bias_params.append(value)
             else:
-                params += [{'params': [value], 'lr':lr, 'weight_decay': cfg.TRAIN.WEIGHT_DECAY}]
+                nonbias_params.append(value)
+    params = [
+        {'params': nonbias_params,
+         'lr': cfg.SOLVER.BASE_LR,
+         'weight_decay': cfg.SOLVER.WEIGHT_DECAY},
+        {'params': bias_params,
+         'lr': cfg.SOLVER.BASE_LR * (cfg.SOLVER.BIAS_DOUBLE_LR + 1),
+         'weight_decay': cfg.SOLVER.WEIGHT_DECAY if cfg.SOLVER.BIAS_WEIGHT_DECAY else 0}
+    ]
 
-    if args.optimizer == "adam":
+    if cfg.SOLVER.TYPE == "SGD":
+        optimizer = torch.optim.SGD(params, momentum=cfg.SOLVER.MOMENTUM)
+    elif cfg.SOLVER.TYPE == "Adam":
         optimizer = torch.optim.Adam(params)
-    elif args.optimizer == "sgd":
-        optimizer = torch.optim.SGD(params, momentum=cfg.TRAIN.MOMENTUM)
 
+    lr = cfg.SOLVER.BASE_LR  # for display in command line
 
     ### Training Setups ###
-
-    run_name = get_run_name()
-    output_dir = os.path.join(args.save_dir, args.net, args.dataset, run_name)
+    run_name = misc_utils.get_run_name()
+    output_dir = misc_utils.get_output_dir(args, run_name)
 
     if not args.no_save:
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)
+
+        blob = {'cfg': yaml.dump(cfg), 'args': args}
+        with open(os.path.join(output_dir, 'config_and_args.pkl'), 'wb') as f:
+            pickle.dump(blob, f, pickle.HIGHEST_PROTOCOL)
 
         if args.use_tfboard:
             from tensorboardX import SummaryWriter
             # Set the Tensorboard logger
             tblogger = SummaryWriter(output_dir)
 
-
     ### Training Loop ###
+    maskRCNN.train()
 
-    iters_per_epoch = int(train_size / args.batch_size)  # drop last
+    # iters_per_epoch = int(train_size / args.batch_size)  # drop last
+    iters_per_epoch = 10
     ckpt_interval_per_epoch = iters_per_epoch // args.ckpt_num_per_epoch
     step = 0
     try:
+        logger.info('Training starts !')
         for epoch in range(args.start_epoch, args.start_epoch + args.num_epochs):
-            maskRCNN.train()
+            # ---- Start of epoch ----
             loss_avg = 0
             timers['train_loop'].tic()
+
+            # adjust learning rate
+            if args.lr_decay_epochs and epoch == args.lr_decay_epochs[0]:
+                args.lr_decay_epochs.pop(0)
+                net_utils.decay_learning_rate(optimizer, lr, cfg.SOLVER.GAMMA)
+                lr *= cfg.SOLVER.GAMMA
 
             for step, input_data in zip(range(iters_per_epoch), dataloader):
 
@@ -383,8 +337,6 @@ def main():
 
                 optimizer.zero_grad()
                 loss.backward()
-                if args.net == "vgg16":
-                    clip_gradient(maskRCNN, 10)
                 optimizer.step()
 
                 if (step+1) % ckpt_interval_per_epoch == 0:
@@ -403,8 +355,8 @@ def main():
                     fg_cnt = torch.sum(rois_label.data.ne(0))
                     bg_cnt = rois_label.data.numel() - fg_cnt
 
-                    print("[%s][session %d][epoch %2d][iter %4d / %4d]"
-                          % (run_name, args.session, epoch, step, iters_per_epoch))
+                    print("[%s][epoch %2d][iter %4d / %4d]"
+                          % (run_name, epoch, step, iters_per_epoch))
                     print("\t\tloss: %.4f, lr: %.2e" % (loss_avg, lr))
                     print("\t\tfg/bg=(%d/%d), time cost: %f" % (fg_cnt, bg_cnt, diff))
                     print("\t\trpn_cls: %.4f, rpn_bbox: %.4f, rcnn_cls: %.4f,"
@@ -429,10 +381,6 @@ def main():
             # ---- End of epoch ----
             # save checkpoint
             save(output_dir, args, epoch, step, maskRCNN, optimizer, iters_per_epoch)
-            # adjust learning rate
-            if (epoch+1) % args.lr_decay_step == 0:
-                adjust_learning_rate(optimizer, args.lr_decay_gamma)
-                lr *= args.lr_decay_gamma
             # reset timer
             timers['train_loop'].reset()
 

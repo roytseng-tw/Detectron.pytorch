@@ -8,7 +8,7 @@ data/*
 .ipynb_checkpoints
 notebooks/*.pkl
 
-/output
+/Outputs
 /mask_vis
 
 # ------------------------------

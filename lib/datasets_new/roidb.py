@@ -152,8 +152,8 @@ def rank_for_training(roidb):
         ratio_list: ndarray, list of aspect ratios from small to large
         ratio_index: ndarray, list of roidb entry indices correspond to the ratios
     """
-    RATIO_HI = 2  # largest ratio to preserve.
-    RATIO_LO = 0.5  # smallest ratio to preserve.
+    RATIO_HI = cfg.TRAIN.ASPECT_HI  # largest ratio to preserve.
+    RATIO_LO = cfg.TRAIN.ASPECT_LO  # smallest ratio to preserve.
 
     need_crop_cnt = 0
 

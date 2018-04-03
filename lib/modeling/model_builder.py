@@ -10,11 +10,11 @@ from core.config import cfg
 from model.roi_pooling.modules.roi_pool import _RoIPooling
 from model.roi_crop.modules.roi_crop import _RoICrop
 from modeling.roi_xfrom.roi_align.modules.roi_align import RoIAlign
-from model.utils.net_utils import _affine_grid_gen
 import modeling.rpn_heads as rpn_heads
 import modeling.fast_rcnn_heads as fast_rcnn_heads
 import modeling.mask_rcnn_heads as mask_rcnn_heads
 import utils.blob as blob_utils
+import utils.net as net_utils
 import utils.resnet_weights_helper as resnet_utils
 
 logger = logging.getLogger(__name__)
@@ -45,7 +45,6 @@ class Generalized_RCNN(nn.Module):
     def __init__(self, train=False):
         super().__init__()
         self.training = train
-        cfg.IS_TRAIN = train  # Be sure to use this value on module init
 
         # Backbone for feature extraction
         self.Conv_Body = get_func(cfg.MODEL.CONV_BODY)()
@@ -94,18 +93,17 @@ class Generalized_RCNN(nn.Module):
         if cfg.RESNETS.IMAGENET_PRETRAINED:
             resnet_utils.load_pretrained_imagenet_weights(self.Conv_Body.num_layers, self)
             # Check if shared weights are equaled
-            if getattr(self.Mask_Head, 'SHARE_RES5', False):
-                assert self.Mask_Head.res5.state_dict() == self.Conv_Body.res5.state_dict()
-            if getattr(self.Keypoint_Head, 'SHARE_RES5', False):
-                assert self.Mask_Head.res5.state_dict() == self.Conv_Body.res5.state_dict()
-        
-        # Set trainning for all submodules. Must call after all submodules are added.
-        self.train(train)
+            if cfg.MODEL.MASK_ON and getattr(self.Mask_Head, 'SHARE_RES5', False):
+                assert self.Mask_Head.res5.state_dict() == self.Box_Head.res5.state_dict()
+            if cfg.MODEL.KEYPOINTS_ON and getattr(self.Keypoint_Head, 'SHARE_RES5', False):
+                assert self.Keypoint_Head.res5.state_dict() == self.Box_Head.res5.state_dict()
 
-    def train(self, mode=True):
-        # Override
-        cfg.IS_TRAIN = mode
-        super().train(mode)
+        if cfg.TRAIN.FREEZE_CONV_BODY:
+            for p in self.Conv_Body.parameters():
+                p.requires_grad = False
+
+        # Set trainning for all submodules. Must call after all submodules are added.
+        self.train(self.training)
 
     def forward(self, data, im_info, roidb=None,
                 rpn_labels_int32_wide=None, rpn_bbox_targets_wide=None,
@@ -189,9 +187,8 @@ class Generalized_RCNN(nn.Module):
         if cfg.POOLING_MODE == 'pool':
             rois_feat = self.Roi_Xform(blob_conv, rois)
         elif cfg.POOLING_MODE == 'crop':
-            grid_xy = _affine_grid_gen(
-                rois,
-                blob_conv.size()[2:], self.grid_size)
+            grid_xy = net_utils.affine_grid_gen(
+                rois, blob_conv.size()[2:], self.grid_size)
             grid_yx = torch.stack(
                 [grid_xy.data[:, :, :, 1], grid_xy.data[:, :, :, 0]], 3).contiguous()
             rois_feat = self.Roi_Xform(blob_conv, Variable(grid_yx).detach())

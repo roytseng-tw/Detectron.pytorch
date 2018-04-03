@@ -18,8 +18,6 @@ class RoiDataLoader(data.Dataset):
         self._roidb = roidb
         self._num_classes = num_classes
         self.training = training
-
-        self.max_num_box = cfg.MAX_NUM_GT_BOXES
         self.DATA_SIZE = len(self._roidb)
 
     def __getitem__(self, index_tuple):

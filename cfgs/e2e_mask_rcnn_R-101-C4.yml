@@ -1,11 +1,19 @@
-EXP_DIR: res50
 POOLING_MODE: align
 POOLING_SIZE: 14
+NUM_GPUS: 8
 MODEL:
-  CONV_BODY: resnet.ResNet50_Conv4_Body
+  CONV_BODY: resnet.ResNet101_Conv4_Body
   FASTER_RCNN: True
   MASK_ON: True
   SHARE_RES5: True
+SOLVER:
+  WEIGHT_DECAY: 0.0001
+  LR_POLICY: steps_with_decay
+  BASE_LR: 0.01
+  GAMMA: 0.1
+  # 2x schedule (note TRAIN.IMS_PER_BATCH: 1)
+  MAX_ITER: 360000
+  STEPS: [0, 240000, 320000]
 RPN:
   SIZES: (32, 64, 128, 256, 512)
 FAST_RCNN:
@@ -16,7 +24,6 @@ MRCNN:
   DILATION: 1  # default 2
   CONV_INIT: MSRAFill  # default: GaussianFill
 TRAIN:
-  DOUBLE_BIAS: False  #TODO: Does Detectron have this?
   SCALES: (800,)
   MAX_SIZE: 1333
   IMS_PER_BATCH: 1
@@ -27,4 +34,3 @@ TEST:
   NMS: 0.5
   RPN_PRE_NMS_TOP_N: 6000
   RPN_POST_NMS_TOP_N: 1000
-
