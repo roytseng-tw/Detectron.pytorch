@@ -24,12 +24,12 @@ import six
 import logging
 import numpy as np
 
-from core.config import cfg
-from datasets_new.json_dataset import JsonDataset
 import utils.boxes as box_utils
 import utils.keypoints as keypoint_utils
 import utils.segms as segm_utils
 import utils.blob as blob_utils
+from core.config import cfg
+from .json_dataset import JsonDataset
 
 logger = logging.getLogger(__name__)
 

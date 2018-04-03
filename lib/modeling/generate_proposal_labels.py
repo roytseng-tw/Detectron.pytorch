@@ -1,7 +1,7 @@
 from torch import nn
 
 from core.config import cfg
-from datasets_new import json_dataset
+from datasets import json_dataset
 import roi_data.fast_rcnn
 
 

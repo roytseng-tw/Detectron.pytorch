@@ -28,7 +28,7 @@ from core.test import im_detect_all
 from modeling.model_builder import Generalized_RCNN
 from utils.detectron_weight_helper import load_detectron_weight
 from utils.timer import Timer
-import datasets_new.dummy_datasets as datasets
+import datasets.dummy_datasets as datasets
 import utils.blob as blob_utils
 import utils.vis as vis_utils
 import utils.misc as misc_utils

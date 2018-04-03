@@ -39,13 +39,13 @@ envu.set_up_matplotlib()
 from pycocotools import mask as COCOmask
 from pycocotools.coco import COCO
 
-from core.config import cfg
-from datasets_new.dataset_catalog import ANN_FN
-from datasets_new.dataset_catalog import DATASETS
-from datasets_new.dataset_catalog import IM_DIR
-from datasets_new.dataset_catalog import IM_PREFIX
-from utils.timer import Timer
 import utils.boxes as box_utils
+from core.config import cfg
+from utils.timer import Timer
+from .dataset_catalog import ANN_FN
+from .dataset_catalog import DATASETS
+from .dataset_catalog import IM_DIR
+from .dataset_catalog import IM_PREFIX
 
 logger = logging.getLogger(__name__)
 
