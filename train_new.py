@@ -102,6 +102,8 @@ def parse_args():
         type=int)
 
     parser.add_argument(
+        '--bs', dest='batch_size', help='batch_size', default=1, type=int)
+    parser.add_argument(
         '--nw',
         dest='num_workers',
         help='number of worker to load data',
@@ -114,8 +116,6 @@ def parse_args():
         dest='mGPUs',
         help='whether use multiple GPUs',
         action='store_true')
-    parser.add_argument(
-        '--bs', dest='batch_size', help='batch_size', default=1, type=int)
 
     # config optimization
     parser.add_argument(
@@ -152,7 +152,7 @@ def parse_args():
         default=1,
         type=int)
 
-    # resume trained model
+    # resume trained model TODO: add resume training mechanism
     parser.add_argument(
         '--r',
         dest='resume',
@@ -179,8 +179,7 @@ def parse_args():
         help='do not save anything',
         action='store_true')
 
-    args = parser.parse_args()
-    return args
+    return parser.parse_args()
 
 
 def save(output_dir, args, epoch, step, model, optimizer, iters_per_epoch):
@@ -204,9 +203,7 @@ def save(output_dir, args, epoch, step, model, optimizer, iters_per_epoch):
     print('save model: {}'.format(save_name))
 
 
-if __name__ == '__main__':
-    # pylint: disable=C0103
-
+def main():
     if not torch.cuda.is_available():
         sys.exit("Need a CUDA device to run the code.")
 
@@ -215,7 +212,8 @@ if __name__ == '__main__':
     print(args)
 
     cfg.NUM_GPUS = torch.cuda.device_count()
-    assert (args.batch_size % cfg.NUM_GPUS) == 0, 'batch_size: %d, NUM_GPUS: %d' % (args.batch_size, cfg.NUM_GPUS)
+    assert (args.batch_size % cfg.NUM_GPUS) == 0, \
+        'batch_size: %d, NUM_GPUS: %d' % (args.batch_size, cfg.NUM_GPUS)
     cfg.TRAIN.IMS_PER_BATCH = args.batch_size // cfg.NUM_GPUS
     print('NUM_GPUs: %d, TRAIN.IMS_PER_BATCH: %d' % (cfg.NUM_GPUS, cfg.TRAIN.IMS_PER_BATCH))
 
@@ -228,11 +226,10 @@ if __name__ == '__main__':
         args.mGPUs = True
 
     if args.dataset == "coco2017":
-        args.train_datasets = ('coco_2017_train', )
+        args.train_datasets = ('coco_2017_train',)
         args.train_proposal_files = ()
     else:
-        sys.exit('Unexpect args.dataset value: ', args.dataset)
-    # cfg.TRAIN.BATCH_SIZE_PRE_IM = 120  # chance to OOM if 128 on 1080ti
+        ValueError("Unexpect args.dataset value: {}".format(args.dataset))
 
     if args.net == 'res50':
         args.cfg_file = "cfgs/res50_mask.yml"
@@ -263,11 +260,7 @@ if __name__ == '__main__':
     timers['roidb'].toc()
     train_size = len(roidb)
     logger.info('{:d} roidb entries'.format(train_size))
-    logger.info('Takes %.2f sec(s) to construct roidb' % timers['roidb'].average_time)
-
-
-    # FIXME: manually set for now
-    cfg.MODEL.NUM_CLASSES = 81
+    logger.info('Takes %.2f sec(s) to construct roidb', timers['roidb'].average_time)
 
     sampler = MinibatchSampler(ratio_list, ratio_index, im_sizes_list)
     dataset = RoiDataLoader(
@@ -353,6 +346,7 @@ if __name__ == '__main__':
 
     iters_per_epoch = int(train_size / args.batch_size)  # drop last
     ckpt_interval_per_epoch = iters_per_epoch // args.ckpt_num_per_epoch
+    step = 0
     try:
         for epoch in range(args.start_epoch, args.start_epoch + args.num_epochs):
             maskRCNN.train()
@@ -362,12 +356,8 @@ if __name__ == '__main__':
             for step, input_data in zip(range(iters_per_epoch), dataloader):
 
                 for key in input_data:
-                    if key != 'roidb':
-                        # roidb is list of ndarray not tensor,
-                        # because roidb consists of entries of variable length
+                    if key != 'roidb': # roidb is a list of ndarrays with inconsistent length
                         input_data[key] = list(map(Variable, input_data[key]))
-                        # if cfg.CUDA:
-                        #     input_data[key] = list(map(lambda x: x.cuda(), input_data[key]))
 
                 outputs = maskRCNN(**input_data)
 
@@ -456,3 +446,7 @@ if __name__ == '__main__':
         # ---- Training ends ----
         if args.use_tfboard:
             tblogger.close()
+
+
+if __name__ == '__main__':
+    main()

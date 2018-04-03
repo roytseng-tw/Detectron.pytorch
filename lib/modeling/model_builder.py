@@ -15,6 +15,7 @@ import modeling.rpn_heads as rpn_heads
 import modeling.fast_rcnn_heads as fast_rcnn_heads
 import modeling.mask_rcnn_heads as mask_rcnn_heads
 import utils.blob as blob_utils
+import utils.resnet_weights_helper as resnet_utils
 
 logger = logging.getLogger(__name__)
 
@@ -89,23 +90,17 @@ class Generalized_RCNN(nn.Module):
 
         self._init_modules()
 
+    def _init_modules(self):
+        if cfg.RESNETS.IMAGENET_PRETRAINED:
+            resnet_utils.load_pretrained_imagenet_weights(self.Conv_Body.num_layers, self)
+            # Check if shared weights are equaled
+            if getattr(self.Mask_Head, 'SHARE_RES5', False):
+                assert self.Mask_Head.res5.state_dict() == self.Conv_Body.res5.state_dict()
+            if getattr(self.Keypoint_Head, 'SHARE_RES5', False):
+                assert self.Mask_Head.res5.state_dict() == self.Conv_Body.res5.state_dict()
+        
         # Set trainning for all submodules. Must call after all submodules are added.
         self.train(train)
-
-    def _init_modules(self):
-        if self.Conv_Body.pretrained:
-            state_dict = self.Conv_Body.get_pretrained_weights()
-            self.Conv_Body.load_state_dict(
-                {k: state_dict[k]
-                 for k in self.Conv_Body.state_dict()})
-        self.Conv_Body._init_modules()  # Freeze weights and reset bn running mean/var
-
-        if self.Box_Head.pretrained:
-            assert self.Conv_Body.pretrained
-            self.Box_Head.load_state_dict(
-                {k: state_dict[k]
-                 for k in self.Box_Head.state_dict()})
-        self.Box_Head._init_modules()
 
     def train(self, mode=True):
         # Override
@@ -119,7 +114,6 @@ class Generalized_RCNN(nn.Module):
         if self.training:
             roidb = list(map(lambda x: blob_utils.deserialize(x)[0], roidb))
 
-        batch_size = im_data.size(0)
         device_id = im_data.get_device()
 
         return_dict = {}  # A dict to collect return variables

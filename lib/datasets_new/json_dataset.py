@@ -74,6 +74,11 @@ class JsonDataset(object):
         self.category_to_id_map = dict(zip(categories, category_ids))
         self.classes = ['__background__'] + categories
         self.num_classes = len(self.classes)
+        if cfg.MODEL.NUM_CLASSES != -1:
+            assert cfg.MODEL.NUM_CLASSES == self.num_classes, \
+                "number of classes should equal when using multiple datasets"
+        else:
+            cfg.MODEL.NUM_CLASSES = self.num_classes
         self.json_category_id_to_contiguous_id = {
             v: i + 1
             for i, v in enumerate(self.COCO.getCatIds())
@@ -105,13 +110,13 @@ class JsonDataset(object):
         return keys
 
     def get_roidb(
-        self,
-        gt=False,
-        proposal_file=None,
-        min_proposal_size=2,
-        proposal_limit=-1,
-        crowd_filter_thresh=0
-    ):
+            self,
+            gt=False,
+            proposal_file=None,
+            min_proposal_size=2,
+            proposal_limit=-1,
+            crowd_filter_thresh=0
+        ):
         """Return an roidb corresponding to the json dataset. Optionally:
            - include ground truth boxes in the roidb
            - add proposals specified in a proposals file

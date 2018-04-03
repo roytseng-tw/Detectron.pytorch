@@ -100,6 +100,7 @@ class mask_rcnn_fcn_head_v0upshare(nn.Module):
         init.constant(self.upconv5.bias, 0)
 
     def share_res5_module(self, res5_target):
+        """ Share res5 block with box head on training """
         self.res5 = res5_target
 
     def detectron_weight_mapping(self):

@@ -45,17 +45,9 @@ class ResNet_ConvX_Body(nn.Module):
         self.block_counts = block_counts
         self.convX = len(block_counts) + 1
         self.num_layers = (sum(block_counts) + 3 * (self.convX == 4)) * 3 + 2
-        if cfg.RESNETS.PRETRAINED:
-            self.pretrained = True
-            self.weights_file = os.path.join(
-                cfg.ROOT_DIR,
-                'data/pretrained_model/resnet%d_caffe.pth' % self.num_layers)
-        else:
-            self.pretrained = False
 
         self.res1 = nn.Sequential(
-            OrderedDict([('conv1',nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3,
-                                            bias=False)),
+            OrderedDict([('conv1', nn.Conv2d(3, 64, 7, stride=2, padding=3, bias=False)),
                          ('bn1', mynn.AffineChannel2d(64)),
                          ('relu', nn.ReLU(inplace=True)),
                          ('maxpool', nn.MaxPool2d(kernel_size=3, stride=2, padding=1))]))
@@ -81,8 +73,7 @@ class ResNet_ConvX_Body(nn.Module):
 
         self.dim_out = dim_in
 
-    def get_pretrained_weights(self):
-        return convert_state_dict(torch.load(self.weights_file))
+        self._init_modules()
 
     def _init_modules(self):
         assert cfg.RESNETS.FREEZE_AT in [0, 2, 3, 4, 5]
@@ -106,36 +97,11 @@ class ResNet_ConvX_Body(nn.Module):
             mapping_to_detectron.update(mapping)
             orphan_in_detectron.extend(orphans)
 
-            # for blk_id in range(self.block_counts[res_id - 2]):
-            #   detectron_prefix = 'res%d_%d' % (res_id, blk_id)
-            #   my_prefix = 'res%d.%d' % (res_id, blk_id)
-
-            #   # residual branch (downsample)
-            #   if getattr(getattr(self, 'res%d' % res_id)[blk_id], 'downsample'):
-            #     dtt_bp = detectron_prefix + '_branch1'  # short for "detectron_branch_prefix"
-            #     mapping_to_detectron[my_prefix + '.downsample.0.weight'] = dtt_bp + '_w'
-            #     orphan_in_detectron.append(dtt_bp + '_b')
-            #     mapping_to_detectron[my_prefix + '.downsample.1.weight'] = dtt_bp + '_bn_s'
-            #     mapping_to_detectron[my_prefix + '.downsample.1.bias'] = dtt_bp + '_bn_b'
-
-            #   # conv branch
-            #   for i, c in zip([1, 2, 3], ['a', 'b', 'c']):
-            #     dtt_bp = detectron_prefix + '_branch2' + c
-            #     mapping_to_detectron[my_prefix + '.conv%d.weight' % i] = dtt_bp + '_w'
-            #     orphan_in_detectron.append(dtt_bp + '_b')
-            #     mapping_to_detectron[my_prefix + '.bn%d.weight' % i] = dtt_bp + '_bn_s'
-            #     mapping_to_detectron[my_prefix + '.bn%d.bias' % i] = dtt_bp + '_bn_b'
-
         return mapping_to_detectron, orphan_in_detectron
 
     def train(self, mode=True):
         # Override
         self.training = mode
-
-        # def set_non_bn(m):
-        #     classname = m.__class__.__name__
-        #     if classname.find('BatchNorm') == -1:
-        #         m.train(mode)
 
         for i in range(cfg.RESNETS.FREEZE_AT + 1, self.convX + 1):
             getattr(self, 'res%d' % i).train(mode)
@@ -149,10 +115,6 @@ class ResNet_ConvX_Body(nn.Module):
 class ResNet_Roi_Conv5_Head(nn.Module):
     def __init__(self, dim_in):
         super().__init__()
-        if cfg.RESNETS.PRETRAINED:
-            self.pretrained = True
-        else:
-            self.pretrained = False
 
         stride_init = cfg.POOLING_SIZE // 7
         self.res5, self.dim_out = _make_layer(Bottleneck, dim_in, 512, 3,
@@ -160,26 +122,10 @@ class ResNet_Roi_Conv5_Head(nn.Module):
         assert self.dim_out == 2048
         self.avgpool = nn.AvgPool2d(7)
 
-    def _init_modules(self):
-        # self.apply(freeze_bn)
-        pass
-
     def detectron_weight_mapping(self):
         mapping_to_detectron, orphan_in_detectron = \
           residual_stage_detectron_mapping(self.res5, 'res5', 3, 5)
         return mapping_to_detectron, orphan_in_detectron
-
-    # def train(self, mode=True):
-    #     # Override
-    #     self.training = mode
-
-    #     def set_non_bn(m):
-    #         classname = m.__class__.__name__
-    #         if classname.find('BatchNorm') == -1:
-    #             m.train(mode)
-
-    #     self.res5.apply(set_non_bn)
-    #     self.avgpool.train(mode)
 
     def forward(self, x):
         res5_feat = self.res5(x)
@@ -195,11 +141,10 @@ class ResNet_Roi_Conv5_Head(nn.Module):
 # ---------------------------------------------------------------------------- #
 
 
-def residual_stage_detectron_mapping(module_ref, module_name, num_blocks,
-                                     res_id):
+def residual_stage_detectron_mapping(module_ref, module_name, num_blocks, res_id):
     """Construct weight mapping relation for a residual stage with `num_blocks` of
-  residual blocks given the stage id: `res_id`
-  """
+    residual blocks given the stage id: `res_id`
+    """
     mapping_to_detectron = {}
     orphan_in_detectron = []
     for blk_id in range(num_blocks):
@@ -233,29 +178,17 @@ def residual_stage_detectron_mapping(module_ref, module_name, num_blocks,
 
 def freeze_params(m):
     """Freeze all the weights by setting requires_grad to False
-  """
+    """
     for p in m.parameters():
         p.requires_grad = False
 
 
-def freeze_bn(m):
-    """Freeze batch-normalization layers.
-
-  Make bn layers not recording the running mean/var and then
-  reset the running mean and running var
-  """
-    if isinstance(m, nn.BatchNorm2d):
-        m.eval()
-        m.running_mean.zero_()
-        m.running_var.fill_(1)
-
-
 def _make_layer(block, inplanes, planes, blocks, stride=1, dilation=1):
     """Make a number of [blocks] residual blocks.
-  Returns:
-    - a sequentail module of residual blocks
-    - final output dimension
-  """
+    Returns:
+        - a sequentail module of residual blocks
+        - final output dimension
+    """
     downsample = None
     if stride != 1 or inplanes != planes * block.expansion:
         downsample = nn.Sequential(
@@ -281,6 +214,7 @@ def _make_layer(block, inplanes, planes, blocks, stride=1, dilation=1):
 
 
 class Bottleneck(nn.Module):
+    """ Bottleneck Residual Block """
     expansion = 4
 
     def __init__(self, inplanes, planes, stride=1, dilation=1,

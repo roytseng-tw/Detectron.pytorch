@@ -84,43 +84,9 @@ def parse_args():
     return args
 
 
-def _get_image_blob(im):
-    """Converts an image into a network input. Preprocessing: subtract mean and resize.
-    Arguments:
-        im (ndarray): a color image in **RGB** order
-    Returns:
-        blob (ndarray): a data blob holding an image pyramid.
-                        Axis order: (batch elem, channel, height, width)
-        im_scale_factors (list): list of image scales (relative to im) used
-        in the image pyramid
-    """
-    im_orig = im.astype(np.float32, copy=True)
-    im_orig = im_orig[:, :, ::-1]  # RGB to BGR
-    im_orig -= cfg.PIXEL_MEANS
-
-    im_shape = im_orig.shape
-    im_size_min = np.min(im_shape[0:2])
-    im_size_max = np.max(im_shape[0:2])
-
-    processed_ims = []
-    im_scale_factors = []
-
-    im_scale = float(cfg.TEST.SCALE) / float(im_size_min)
-    # Prevent the biggest axis from being more than MAX_SIZE
-    if np.round(im_scale * im_size_max) > cfg.TEST.MAX_SIZE:
-        im_scale = float(cfg.TEST.MAX_SIZE) / float(im_size_max)
-    im = cv2.resize(im_orig, None, None, fx=im_scale, fy=im_scale,
-                    interpolation=cv2.INTER_LINEAR)
-    im_scale_factors.append(im_scale)
-    processed_ims.append(im)
-
-    # Create a blob to hold the input images
-    blob = blob_utils.im_list_to_blob(processed_ims)
-    return blob, np.array(im_scale_factors)
-
-
 def main():
     """main function"""
+
     if not torch.cuda.is_available():
         sys.exit("Need a CUDA device to run the code.")
 
@@ -141,8 +107,9 @@ def main():
 
     if args.set_cfgs is not None:
         cfg_from_list(args.set_cfgs)
-    
-    cfg.RESNETS.PRETRAINED = False
+
+    assert args.load_ckpt or args.load_detectron
+    cfg.RESNETS.IMAGENET_PRETRAINED = False  # Don't need to load imagenet pretrained weights
 
     # print('Using config:')
     # pprint.pprint(cfg)

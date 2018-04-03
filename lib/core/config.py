@@ -585,8 +585,8 @@ __C.RESNETS.RES5_DILATION = 1
 # be fixed.
 __C.RESNETS.FREEZE_AT = 2
 
-# Whether to load pretrained weight from ImageNet
-__C.RESNETS.PRETRAINED = True
+# Whether to load pretrained weight with ImageNet
+__C.RESNETS.IMAGENET_PRETRAINED = True
 
 # ---------------------------------------------------------------------------- #
 # Deprecated options (old option from jwyang)
