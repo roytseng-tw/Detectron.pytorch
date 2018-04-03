@@ -290,8 +290,7 @@ def main():
     ### Training Loop ###
     maskRCNN.train()
 
-    # iters_per_epoch = int(train_size / args.batch_size)  # drop last
-    iters_per_epoch = 10
+    iters_per_epoch = int(train_size / args.batch_size)  # drop last
     ckpt_interval_per_epoch = iters_per_epoch // args.ckpt_num_per_epoch
     step = 0
     try:
