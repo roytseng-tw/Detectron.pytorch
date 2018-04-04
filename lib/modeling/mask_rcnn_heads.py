@@ -86,7 +86,7 @@ def mask_rcnn_losses(masks_pred, masks_int32):
     masks_gt = Variable(torch.from_numpy(masks_int32.astype('float32'))).cuda(device_id)
     weight = (masks_gt >= 0).float()
     loss = F.binary_cross_entropy_with_logits(masks_pred.view(n_rois, -1), masks_gt, weight)
-    return loss
+    return loss * cfg.MRCNN.WEIGHT_LOSS_MASK
 
 
 # ---------------------------------------------------------------------------- #
