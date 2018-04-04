@@ -12,7 +12,7 @@ from core.config import cfg
 # ---------------------------------------------------------------------------- #
 
 class keypoint_outputs(nn.Module):
-    """Add Mask R-CNN keypoint specific outputs: keypoint heatmaps."""
+    """Mask R-CNN keypoint specific outputs: keypoint heatmaps."""
     def __init__(self, dim_in):
         super().__init__()
         if cfg.KRCNN.USE_DECONV:
@@ -32,7 +32,7 @@ class keypoint_outputs(nn.Module):
             self.classify = nn.Conv2d(dim_in, cfg.KRCNN.NUM_KEYPOINTS, 1, 1, padding=0)
 
         if cfg.KRCNN.UP_SCALE > 1:
-            #TODO Detectron use conv with bilinear initialized weight
+            #TODO Detectron use conv with bilinear-interpolation-initialized weight
             self.upsample = nn.UpsamplingBilinear2d(scale_factor=cfg.KRCNN.UP_SCALE)
 
     def _init_weights(self):
@@ -83,7 +83,7 @@ class keypoint_outputs(nn.Module):
 
 def keypoint_losses(kps_pred, keypoint_locations_int32, keypoint_weights,
                     keypoint_loss_normalizer=None):
-    """Add Mask R-CNN keypoint specific losses."""
+    """Mask R-CNN keypoint specific losses."""
     device_id = kps_pred.get_device()
     kps_target = Variable(torch.from_numpy(
         keypoint_locations_int32.astype('int64'))).cuda(device_id)
@@ -120,8 +120,12 @@ def keypoint_losses(kps_pred, keypoint_locations_int32, keypoint_weights,
 
 class roi_pose_head_v1convX(nn.Module):
     """Mask R-CNN keypoint head. v1convX design: X * (conv)."""
-    def __init__(self, dim_in):
+    def __init__(self, dim_in, roi_xform_func, spatial_scale):
         super().__init__()
+        self.dim_in = dim_in
+        self.roi_xform = roi_xform_func
+        self.spatial_scale = spatial_scale
+
         hidden_dim = cfg.KRCNN.CONV_HEAD_DIM
         kernel_size = cfg.KRCNN.CONV_HEAD_KERNEL
         pad_size = kernel_size // 2
@@ -154,6 +158,13 @@ class roi_pose_head_v1convX(nn.Module):
 
         return detectron_weight_mapping, orphan_in_detectron
 
-    def forward(self, x):
+    def forward(self, x, keypoint_rois):
+        x = self.roi_xform(
+            x, keypoint_rois,
+            method=cfg.KRCNN.ROI_XFORM_METHOD,
+            resolution=cfg.KRCNN.ROI_XFORM_RESOLUTION,
+            spatial_scale=self.spatial_scale,
+            sampling_ratio=cfg.KRCNN.ROI_XFORM_SAMPLING_RATIO
+        )
         x = self.conv_fcn(x)
         return x

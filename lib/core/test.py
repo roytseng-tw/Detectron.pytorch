@@ -171,7 +171,7 @@ def im_detect_mask(model, im_scale, boxes, blob_conv):
         return pred_masks
 
     mask_rois = Variable(torch.from_numpy(_get_rois_blob(boxes, im_scale))).cuda(0)
-    pred_masks = model.mask_net(mask_rois, blob_conv)
+    pred_masks = model.mask_net(blob_conv, mask_rois)
     pred_masks = pred_masks.data.cpu().numpy()
 
     if cfg.MRCNN.CLS_SPECIFIC_MASK:

@@ -143,8 +143,7 @@ def save(output_dir, args, epoch, step, model, optimizer, iters_per_epoch):
         'step': step,
         'iters_per_epoch': iters_per_epoch,
         'model': model.state_dict(),
-        'optimizer': optimizer.state_dict(),
-        'pooling_mode': cfg.POOLING_MODE}, save_name)
+        'optimizer': optimizer.state_dict()}, save_name)
     print('save model: {}'.format(save_name))
 
 
@@ -231,8 +230,6 @@ def main():
         logging.info("loading checkpoint %s", load_name)
         checkpoint = torch.load(load_name)
         maskRCNN.load_state_dict(checkpoint['model'])
-        if 'pooling_mode' in checkpoint.keys():
-            assert cfg.POOLING_MODE == checkpoint['pooling_mode']
 
     if args.load_detectron:
         logging.info("loading Detectron weights %s", args.load_detectron)

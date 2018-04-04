@@ -1,5 +1,3 @@
-POOLING_MODE: align
-POOLING_SIZE: 14
 NUM_GPUS: 8
 MODEL:
   CONV_BODY: resnet.ResNet50_Conv4_Body
@@ -18,9 +16,12 @@ RPN:
   SIZES: (32, 64, 128, 256, 512)
 FAST_RCNN:
   ROI_BOX_HEAD: resnet.ResNet_Roi_Conv5_Head
+  ROI_XFORM_METHOD: RoIAlign
 MRCNN:
   ROI_MASK_HEAD: mask_rcnn_heads.mask_rcnn_fcn_head_v0upshare
   RESOLUTION: 14
+  ROI_XFORM_METHOD: RoIAlign
+  ROI_XFORM_RESOLUTION: 14
   DILATION: 1  # default 2
   CONV_INIT: MSRAFill  # default: GaussianFill
 TRAIN:
@@ -34,4 +35,3 @@ TEST:
   NMS: 0.5
   RPN_PRE_NMS_TOP_N: 6000
   RPN_POST_NMS_TOP_N: 1000
-

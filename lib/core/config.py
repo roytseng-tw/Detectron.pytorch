@@ -794,9 +794,10 @@ __C.EXPECTED_RESULTS_EMAIL = b''
 # Data directory
 __C.DATA_DIR = osp.abspath(osp.join(__C.ROOT_DIR, 'data'))
 
+# [Deprecate]
 __C.POOLING_MODE = 'crop'
 
-# Size of the pooled region after RoI pooling
+# [Deprecate] Size of the pooled region after RoI pooling
 __C.POOLING_SIZE = 7
 
 __C.CROP_RESIZE_WITH_MAX_POOL = True

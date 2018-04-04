@@ -106,8 +106,6 @@ def main():
         print("loading checkpoint %s" % (load_name))
         checkpoint = torch.load(load_name)
         maskRCNN.load_state_dict(checkpoint['model'])
-        if 'pooling_mode' in checkpoint.keys():
-            assert cfg.POOLING_MODE == checkpoint['pooling_mode']
 
     if args.load_detectron:
         print("loading detectron weights %s" % args.load_detectron)

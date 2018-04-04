@@ -16,17 +16,27 @@ from modeling import resnet
 # ---------------------------------------------------------------------------- #
 
 class mask_rcnn_outputs(nn.Module):
-    def __init__(self, inplanes):
+    """Mask R-CNN specific outputs: either mask logits or probs."""
+    def __init__(self, dim_in):
         super().__init__()
-        if not cfg.MRCNN.CLS_SPECIFIC_MASK:
-            n_classes = 1
+        self.dim_in = dim_in
+
+        n_classes = cfg.MODEL.NUM_CLASSES if cfg.MRCNN.CLS_SPECIFIC_MASK else 1
+        if cfg.MRCNN.USE_FC_OUTPUT:
+            # Predict masks with a fully connected layer
+            self.classify = nn.Linear(dim_in, n_classes * cfg.MRCNN.RESOLUTION**2)
         else:
-            n_classes = cfg.MODEL.NUM_CLASSES
-        self.classify = nn.Conv2d(inplanes, n_classes, 1, 1, 0)
+            # Predict mask using Conv
+            self.classify = nn.Conv2d(dim_in, n_classes, 1, 1, 0)
+            if cfg.MRCNN.UPSAMPLE_RATIO > 1:
+                #TODO Detectron use conv with bilinear-interpolation-initialized weight
+                self.upsample = nn.UpsamplingBilinear2d(scale_factor=cfg.MRCNN.UPSAMPLE_RATIO)
         self._init_weights()
 
     def _init_weights(self):
-        if cfg.MRCNN.CLS_SPECIFIC_MASK:
+        if not cfg.MRCNN.USE_FC_OUTPUT and cfg.MRCNN.CLS_SPECIFIC_MASK:
+            # Use GaussianFill for class-agnostic mask prediction; fills based on
+            # fan-in can be too large in this case and cause divergence
             weight_init_func = init.kaiming_normal
         else:
             weight_init_func = partial(init.normal, std=0.001)
@@ -43,6 +53,8 @@ class mask_rcnn_outputs(nn.Module):
 
     def forward(self, x):
         x = self.classify(x)
+        if cfg.MRCNN.UPSAMPLE_RATIO > 1:
+            x = self.upsample(x)
         if not self.training:
             x = F.sigmoid(x)
         return x
@@ -68,6 +80,7 @@ class mask_rcnn_outputs(nn.Module):
 
 
 def mask_rcnn_losses(masks_pred, masks_int32):
+    """Mask R-CNN specific losses."""
     n_rois, n_classes, _, _ = masks_pred.size()
     device_id = masks_pred.get_device()
     masks_gt = Variable(torch.from_numpy(masks_int32.astype('float32'))).cuda(device_id)
@@ -81,15 +94,22 @@ def mask_rcnn_losses(masks_pred, masks_int32):
 # ---------------------------------------------------------------------------- #
 
 class mask_rcnn_fcn_head_v0upshare(nn.Module):
-    def __init__(self, inplanes):
+    """Use a ResNet "conv5" / "stage5" head for mask prediction. Weights and
+    computation are shared with the conv5 box head. Computation can only be
+    shared during training, since inference is cascaded.
+
+    v0upshare design: conv5, convT 2x2.
+    """
+    def __init__(self, dim_in, roi_xform_func, spatial_scale):
         super().__init__()
-        self.inplanes = inplanes
+        self.dim_in = dim_in
+        self.roi_xform = roi_xform_func
+        self.spatial_scale = spatial_scale
         self.dim_out = cfg.MRCNN.DIM_REDUCED
         self.SHARE_RES5 = True
 
-        # the `self.res5` will be assigned later
-        self.res5 = None
-        _, dim_conv5 = ResNet_roi_conv5_head_for_masks(inplanes)
+        self.res5 = None  # will be assigned later
+        dim_conv5 = 2048
         self.upconv5 = nn.ConvTranspose2d(dim_conv5, self.dim_out, 2, 2, 0)
 
         self._init_weights()
@@ -118,7 +138,7 @@ class mask_rcnn_fcn_head_v0upshare(nn.Module):
         })
         return detectron_weight_mapping, orphan_in_detectron
 
-    def forward(self, x, roi_has_mask_int32=None):
+    def forward(self, x, roi_has_mask_int32=None, mask_rois=None):
         if self.training:
             # On training, we share the res5 computation with bbox head, so it's necessary to
             # sample 'useful' batches from the input x (res5_2_sum). 'Useful' means that the
@@ -128,9 +148,15 @@ class mask_rcnn_fcn_head_v0upshare(nn.Module):
             inds = Variable(torch.from_numpy(inds)).cuda(x.get_device())
             x = x[inds]
         else:
-            # On testing, the computation is not shared with bbox head. This time the input `x`
-            # only contains the useful roi batches, so we don't need roi_mask_weights for selectoin
-            assert roi_has_mask_int32 is None
+            # On testing, the computation is not shared with bbox head. This time input `x`
+            # is the output features from the backbone network
+            x = self.roi_xform(
+                x, mask_rois,
+                method=cfg.MRCNN.ROI_XFORM_METHOD,
+                resolution=cfg.MRCNN.ROI_XFORM_RESOLUTION,
+                spatial_scale=self.spatial_scale,
+                sampling_ratio=cfg.MRCNN.ROI_XFORM_SAMPLING_RATIO
+            )
             x = self.res5(x)
         x = self.upconv5(x)
         x = F.relu(x, inplace=True)
@@ -138,12 +164,15 @@ class mask_rcnn_fcn_head_v0upshare(nn.Module):
 
 
 class mask_rcnn_fcn_head_v0up(nn.Module):
-    def __init__(self, inplanes):
+    """v0up design: conv5, deconv 2x2 (no weight sharing with the box head)."""
+    def __init__(self, dim_in, roi_xform_func, spatial_scale):
         super().__init__()
-        self.inplanes = inplanes
+        self.dim_in = dim_in
+        self.roi_xform = roi_xform_func
+        self.spatial_scale = spatial_scale
         self.dim_out = cfg.MRCNN.DIM_REDUCED
 
-        self.res5, dim_out = ResNet_roi_conv5_head_for_masks(inplanes)
+        self.res5, dim_out = ResNet_roi_conv5_head_for_masks(dim_in)
         self.upconv5 = nn.ConvTranspose2d(dim_out, self.dim_out, 2, 2, 0)
 
         self._init_weights()
@@ -164,7 +193,14 @@ class mask_rcnn_fcn_head_v0up(nn.Module):
         })
         return detectron_weight_mapping, orphan_in_detectron
 
-    def forward(self, x):
+    def forward(self, x, mask_rois):
+        x = self.roi_xform(
+            x, mask_rois,
+            method=cfg.MRCNN.ROI_XFORM_METHOD,
+            resolution=cfg.MRCNN.ROI_XFOM_RESOLUTION,
+            spatial_scale=self.spatial_scale,
+            sampling_ratio=cfg.MRCNN.ROI_XFORM_SAMPLING_RATIO
+        )
         x = self.res5(x)
         # print(x.size()) e.g. (128, 2048, 7, 7)
         x = self.upconv5(x)
@@ -173,8 +209,9 @@ class mask_rcnn_fcn_head_v0up(nn.Module):
 
 
 def ResNet_roi_conv5_head_for_masks(dim_in):
+    """ResNet "conv5" / "stage5" head for predicting masks."""
     dilation = cfg.MRCNN.DILATION
-    stride_init = cfg.POOLING_SIZE // 7  # by default: 2
+    stride_init = cfg.MRCNN.ROI_XFORM_RESOLUTION // 7  # by default: 2
     module, dim_out = resnet._make_layer(resnet.Bottleneck, dim_in, 512, 3,
                                          stride_init, dilation)
     return module, dim_out

@@ -113,10 +113,12 @@ class ResNet_ConvX_Body(nn.Module):
 
 
 class ResNet_Roi_Conv5_Head(nn.Module):
-    def __init__(self, dim_in):
+    def __init__(self, dim_in, roi_xform_func, spatial_scale):
         super().__init__()
+        self.roi_xform = roi_xform_func
+        self.spatial_scale = spatial_scale
 
-        stride_init = cfg.POOLING_SIZE // 7
+        stride_init = cfg.FAST_RCNN.ROI_XFORM_RESOLUTION // 7
         self.res5, self.dim_out = _make_layer(Bottleneck, dim_in, 512, 3,
                                               stride_init)
         assert self.dim_out == 2048
@@ -127,7 +129,14 @@ class ResNet_Roi_Conv5_Head(nn.Module):
           residual_stage_detectron_mapping(self.res5, 'res5', 3, 5)
         return mapping_to_detectron, orphan_in_detectron
 
-    def forward(self, x):
+    def forward(self, x, rois):
+        x = self.roi_xform(
+            x, rois,
+            method=cfg.FAST_RCNN.ROI_XFORM_METHOD,
+            resolution=cfg.FAST_RCNN.ROI_XFORM_RESOLUTION,
+            spatial_scale=self.spatial_scale,
+            sampling_ratio=cfg.FAST_RCNN.ROI_XFORM_SAMPLING_RATIO
+        )
         res5_feat = self.res5(x)
         x = self.avgpool(res5_feat)
         if cfg.MODEL.SHARE_RES5 and self.training:

@@ -10,6 +10,9 @@ from core.config import cfg
 from model.roi_pooling.modules.roi_pool import _RoIPooling
 from model.roi_crop.modules.roi_crop import _RoICrop
 from modeling.roi_xfrom.roi_align.modules.roi_align import RoIAlign
+from model.roi_pooling.functions.roi_pool import RoIPoolFunction
+from model.roi_crop.functions.roi_crop import RoICropFunction
+from modeling.roi_xfrom.roi_align.functions.roi_align import RoIAlignFunction
 import modeling.rpn_heads as rpn_heads
 import modeling.fast_rcnn_heads as fast_rcnn_heads
 import modeling.mask_rcnn_heads as mask_rcnn_heads
@@ -55,29 +58,20 @@ class Generalized_RCNN(nn.Module):
         self.RPN = rpn_heads.Single_Scale_RPN_Outputs(
             self.Conv_Body.dim_out, self.Conv_Body.spatial_scale)
 
-        if cfg.POOLING_MODE == 'pool':
-            self.Roi_Xform = _RoIPooling(cfg.POOLING_SIZE, cfg.POOLING_SIZE, 1 / 16)
-        elif cfg.POOLING_MODE == 'crop':
-            self.Roi_Xform = _RoICrop()
-        elif cfg.POOLING_MODE == 'align':
-            self.Roi_Xform = RoIAlign(cfg.POOLING_SIZE, cfg.POOLING_SIZE, 1 / 16, 0)
-        else:
-            raise ValueError(cfg.POOLING_MODE)
-
         # BBOX Branch
         if not cfg.MODEL.RPN_ONLY:
             self.Box_Head = get_func(cfg.FAST_RCNN.ROI_BOX_HEAD)(
-                self.RPN.dim_out)
+                self.RPN.dim_out, self.roi_feature_transform, self.Conv_Body.spatial_scale)
             self.Box_Outs = fast_rcnn_heads.fast_rcnn_outputs(
                 self.Box_Head.dim_out)
 
         # Mask Branch
         if cfg.MODEL.MASK_ON:
             self.Mask_Head = get_func(cfg.MRCNN.ROI_MASK_HEAD)(
-                self.RPN.dim_out)
+                self.RPN.dim_out, self.roi_feature_transform, self.Conv_Body.spatial_scale)
             if getattr(self.Mask_Head, 'SHARE_RES5', False):
                 self.Mask_Head.share_res5_module(self.Box_Head.res5)
-            self.Mask_Outs = mask_rcnn_heads.mask_rcnn_outputs(self.Mask_Head.dim_out)
+            self.Mask_Outs = mask_rcnn_heads.mask_rcnn_outputs(self.Mask_Head.dim_out)  #TODO: reference config values
 
         # Keypoints Branch
         if cfg.MODEL.KEYPOINTS_ON:
@@ -127,18 +121,17 @@ class Generalized_RCNN(nn.Module):
         if self.training:
             return_dict['rois_label'] = rpn_ret['labels_int32']
 
-        rois_feat = self.roi_feature_transform(rois, blob_conv)
+        # rois_feat = self.roi_feature_transform(rois, blob_conv)
 
         if not cfg.MODEL.RPN_ONLY:
             if cfg.MODEL.SHARE_RES5 and self.training:
-                box_feat, res5_feat = self.Box_Head(rois_feat)
+                box_feat, res5_feat = self.Box_Head(blob_conv, rois)
             else:
-                box_feat = self.Box_Head(rois_feat)
+                box_feat = self.Box_Head(blob_conv, rois)
             cls_score, bbox_pred = self.Box_Outs(box_feat)
             return_dict['cls_score'] = cls_score
             return_dict['bbox_pred'] = bbox_pred
         else:
-            return_dict['rois_feat'] = rois_feat
             return return_dict  # TODO: complete the returns for RPN only situation
 
         if self.training:
@@ -159,21 +152,23 @@ class Generalized_RCNN(nn.Module):
 
             if cfg.MODEL.MASK_ON:
                 if getattr(self.Mask_Head, 'SHARE_RES5', False):
-                    mask_feat = self.Mask_Head(res5_feat, rpn_ret['roi_has_mask_int32'])
+                    mask_feat = self.Mask_Head(res5_feat, roi_has_mask_int32=rpn_ret['roi_has_mask_int32'])
                 else:
-                    mask_feat = self.Mask_Head(rois_feat)
+                    mask_feat = self.Mask_Head(blob_conv, mask_rois=rpn_ret['mask_rois'])
                 mask_pred = self.Mask_Outs(mask_feat)
                 # return_dict['mask_pred'] = mask_pred
                 # mask loss
-                loss_mask = mask_rcnn_heads.mask_rcnn_losses(
-                    mask_pred, rpn_ret['masks_int32'])  #CHECK
+                loss_mask = mask_rcnn_heads.mask_rcnn_losses(mask_pred, rpn_ret['masks_int32'])
                 return_dict['loss_rcnn_mask'] = loss_mask
 
             if cfg.MODEL.KEYPOINTS_ON:
                 if getattr(self.Keypoint_Head, 'SHARE_RES5', False):
-                    kps_feat = self.Keypoint_Head(res5_feat, rpn_ret['keypoint_weights'])
+                    # No corresponding keypoint head implemented yet (Neither in Detectron)
+                    # Also, rpn need to generate the label 'roi_has_keypoints_int32'
+                    kps_feat = self.Keypoint_Head(
+                        res5_feat, roi_has_keypoints_int32=rpn_ret['roi_has_keypoint_int32'])
                 else:
-                    kps_feat = self.Keypoint_Head(rois_feat)
+                    kps_feat = self.Keypoint_Head(blob_conv, keypoint_rois=rpn_ret['keypoint_rois'])
                 kps_pred = self.Keypoint_Outs(kps_feat)
                 # return_dict['keypoints_pred'] = kps_pred
                 # keypoints loss
@@ -187,40 +182,54 @@ class Generalized_RCNN(nn.Module):
 
         return return_dict
 
-    def roi_feature_transform(self, rois, blob_conv):
+    def roi_feature_transform(self, blobs_in, rois, method='RoIPoolF',
+                              resolution=7, spatial_scale=1. / 16., sampling_ratio=0):
         # rois blob: holds R regions of interest, each is a 5-tuple
         # (batch_idx, x1, y1, x2, y2) specifying an image batch index and a
         # rectangle (x1, y1, x2, y2)
-        if cfg.POOLING_MODE == 'pool':
-            rois_feat = self.Roi_Xform(blob_conv, rois)
-        elif cfg.POOLING_MODE == 'crop':
-            grid_xy = net_utils.affine_grid_gen(
-                rois, blob_conv.size()[2:], self.grid_size)
-            grid_yx = torch.stack(
-                [grid_xy.data[:, :, :, 1], grid_xy.data[:, :, :, 0]], 3).contiguous()
-            rois_feat = self.Roi_Xform(blob_conv, Variable(grid_yx).detach())
-            if cfg.CROP_RESIZE_WITH_MAX_POOL:
-                rois_feat = F.max_pool2d(rois_feat, 2, 2)
-        elif cfg.POOLING_MODE == 'align':
-            rois_feat = self.Roi_Xform(blob_conv, rois)
-        return rois_feat
+        assert method in {'RoIPoolF', 'RoICrop', 'RoIAlign'}, \
+            'Unknown pooling method: {}'.format(method)
 
-    def mask_net(self, mask_rois, blob_conv):
+        if isinstance(blobs_in, list):
+            # TODO FPN case: add RoIFeatureTransform to each FPN level
+            raise NotImplementedError()
+        else:
+            # Single feature level
+            if method == 'RoIPoolF':
+                xform_out = RoIPoolFunction(resolution, resolution, spatial_scale)(blobs_in, rois)
+            elif method == 'RoICrop':
+                grid_xy = net_utils.affine_grid_gen(rois, blobs_in.size()[2:], self.grid_size)
+                grid_yx = torch.stack(
+                    [grid_xy.data[:, :, :, 1], grid_xy.data[:, :, :, 0]], 3).contiguous()
+                xform_out = RoICropFunction()(blobs_in, Variable(grid_yx).detach())
+                if cfg.CROP_RESIZE_WITH_MAX_POOL:
+                    xform_out = F.max_pool2d(xform_out, 2, 2)
+            elif method == 'RoIAlign':
+                xform_out = RoIAlignFunction(
+                    resolution, resolution, spatial_scale, sampling_ratio)(blobs_in, rois)
+
+        return xform_out
+
+    def mask_net(self, blob_conv, mask_rois):
         """For inference"""
         if not self.training:
-            mask_rois_feat = self.roi_feature_transform(mask_rois, blob_conv)
-            mask_feat = self.Mask_Head(mask_rois_feat)
+            mask_feat = self.Mask_Head(blob_conv, mask_rois=mask_rois)
             mask_pred = self.Mask_Outs(mask_feat)
             return mask_pred
+        else:
+            raise ValueError('You should call this function only on inference.'
+                             'Set the network in inference mode by net.eval().')
 
-    def keypoint_net(self, keypoint_rois, blob_conv):
+
+    def keypoint_net(self, blob_conv, keypoint_rois):
         """For inference"""
         if not self.training:
-            keypoint_rois_feat = self.roi_feature_transform(
-                keypoint_rois, blob_conv)
-            kps_feat = self.Keypoint_Head(keypoint_rois_feat)
+            kps_feat = self.Keypoint_Head(blob_conv, keypoint_rois=keypoint_rois)
             kps_pred = self.Keypoint_Outs(kps_feat)
             return kps_pred
+        else:
+            raise ValueError('You should call this function only on inference.'
+                             'Set the network in inference mode by net.eval().')
 
     def detectron_weight_mapping(self):
         d_wmap = {}  # detectron_weight_mapping

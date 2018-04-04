@@ -91,7 +91,7 @@ class JsonDataset(object):
 
     @property
     def cache_path(self):
-        cache_path = os.path.abspath(os.path.join(cfg.DATA_DIR, 'cache_new'))
+        cache_path = os.path.abspath(os.path.join(cfg.DATA_DIR, 'cache'))
         if not os.path.exists(cache_path):
             os.makedirs(cache_path)
         return cache_path
