@@ -13,6 +13,7 @@ from modeling.roi_xfrom.roi_align.modules.roi_align import RoIAlign
 import modeling.rpn_heads as rpn_heads
 import modeling.fast_rcnn_heads as fast_rcnn_heads
 import modeling.mask_rcnn_heads as mask_rcnn_heads
+import modeling.keypoint_rcnn_heads as keypoint_rcnn_heads
 import utils.blob as blob_utils
 import utils.net as net_utils
 import utils.resnet_weights_helper as resnet_utils
@@ -37,7 +38,7 @@ def get_func(func_name):
         module = importlib.import_module(module_name)
         return getattr(module, parts[-1])
     except Exception:
-        logger.error('Failed to find function: {}'.format(func_name))
+        logger.error('Failed to find function: %s', func_name)
         raise
 
 
@@ -76,8 +77,7 @@ class Generalized_RCNN(nn.Module):
                 self.RPN.dim_out)
             if getattr(self.Mask_Head, 'SHARE_RES5', False):
                 self.Mask_Head.share_res5_module(self.Box_Head.res5)
-            self.Mask_Outs = mask_rcnn_heads.mask_rcnn_outputs(
-                self.Mask_Head.dim_out, cfg.MODEL.NUM_CLASSES)
+            self.Mask_Outs = mask_rcnn_heads.mask_rcnn_outputs(self.Mask_Head.dim_out)
 
         # Keypoints Branch
         if cfg.MODEL.KEYPOINTS_ON:
@@ -85,7 +85,7 @@ class Generalized_RCNN(nn.Module):
                 self.RPN.dim_out)
             if getattr(self.Keypoint_Head, 'SHARE_RES5', False):
                 self.Keypoint_Head.share_res5_module(self.Box_Head.res5)
-            # self.Keypoint_Outs = TODO
+            self.Keypoint_Outs = keypoint_rcnn_heads.keypoint_outputs(self.Keypoint_Head.dim_out)
 
         self._init_modules()
 
@@ -176,7 +176,14 @@ class Generalized_RCNN(nn.Module):
                     kps_feat = self.Keypoint_Head(rois_feat)
                 kps_pred = self.Keypoint_Outs(kps_feat)
                 # return_dict['keypoints_pred'] = kps_pred
-                # keypoints loss TODO
+                # keypoints loss
+                if cfg.KRCNN.NORMALIZE_BY_VISIBLE_KEYPOINTS:
+                    keypoint_rcnn_heads.keypoint_losses(
+                        kps_pred, rpn_ret['keypoint_locations_int32'], rpn_ret['keypoint_weights'])
+                else:
+                    keypoint_rcnn_heads.keypoint_losses(
+                        kps_pred, rpn_ret['keypoint_locations_int32'], rpn_ret['keypoint_weights'],
+                        rpn_ret['keypoint_loss_normalizer'])
 
         return return_dict
 

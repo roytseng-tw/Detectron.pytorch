@@ -369,6 +369,11 @@ class JsonDataset(object):
                 zip(keypoints, range(len(keypoints))))
             self.keypoints = keypoints
             self.num_keypoints = len(keypoints)
+            if cfg.KRCNN.NUM_KEYPOINTS != -1:
+                assert cfg.KRCNN.NUM_KEYPOINTS == self.num_keypoints, \
+                    "number of keypoints should equal when using multiple datasets"
+            else:
+                cfg.KRCNN.NUM_KEYPOINTS = self.num_keypoints
             self.keypoint_flip_map = {
                 'left_eye': 'right_eye',
                 'left_ear': 'right_ear',

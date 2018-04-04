@@ -633,9 +633,6 @@ __C.KRCNN.ROI_KEYPOINTS_HEAD = ''
 # Output size (and size loss is computed on), e.g., 56x56
 __C.KRCNN.HEATMAP_SIZE = -1
 
-# Number of keypoints in the dataset (e.g., 17 for COCO)
-__C.KRCNN.NUM_KEYPOINTS = -1
-
 # Use bilinear interpolation to upsample the final heatmap by this factor
 __C.KRCNN.UP_SCALE = -1
 

@@ -16,10 +16,12 @@ from modeling import resnet
 # ---------------------------------------------------------------------------- #
 
 class mask_rcnn_outputs(nn.Module):
-    def __init__(self, inplanes, n_classes):
+    def __init__(self, inplanes):
         super().__init__()
         if not cfg.MRCNN.CLS_SPECIFIC_MASK:
             n_classes = 1
+        else:
+            n_classes = cfg.MODEL.NUM_CLASSES
         self.classify = nn.Conv2d(inplanes, n_classes, 1, 1, 0)
         self._init_weights()
 
