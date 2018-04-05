@@ -88,18 +88,16 @@ def parse_args():
         default=None, type=float)
     parser.add_argument(
         '--lr_decay_epochs',
-        help='Epochs to decay learning rate. Epoch is 0-indexed. '
-             'Decay on the start of epoch',
+        help='Epochs to decay the learning rate on. '
+             'Decay happens on the beginning of a epoch. '
+             'Epoch is 0-indexed.',
         default=[4, 5], nargs='+', type=int)
 
     # Resume training TODO: add resume training mechanism
     parser.add_argument(
-        '--r', dest='resume',
-        help='resume checkpoint or not',
+        '--resume_epoch',
+        help='resume to training on checkpoint at the end of an epoch',
         action='store_true')
-    parser.add_argument('--checkrun', help='run name to load model')
-    parser.add_argument('--checkepoch', help='epoch to load model', type=int)
-    parser.add_argument('--checkstep', help='step to load model', type=int)
 
     # Checkpoint and Logging
     parser.add_argument(
@@ -149,12 +147,13 @@ def save(output_dir, args, epoch, step, model, optimizer, iters_per_epoch):
 
 def main():
     """Main function"""
-    if not torch.cuda.is_available():
-        sys.exit("Need a CUDA device to run the code.")
 
     args = parse_args()
     print('Called with args:')
     print(args)
+
+    if not torch.cuda.is_available():
+        sys.exit("Need a CUDA device to run the code.")
 
     if args.cuda or cfg.NUM_GPUS > 0:
         cfg.CUDA = True
@@ -225,23 +224,6 @@ def main():
     ### Model ###
     maskRCNN = Generalized_RCNN(train=True)
 
-    if args.load_ckpt:
-        load_name = args.load_ckpt
-        logging.info("loading checkpoint %s", load_name)
-        checkpoint = torch.load(load_name)
-        maskRCNN.load_state_dict(checkpoint['model'])
-
-    if args.load_detectron:
-        logging.info("loading Detectron weights %s", args.load_detectron)
-        load_detectron_weight(maskRCNN, args.load_detectron)
-
-    if args.mGPUs:
-        maskRCNN = mynn.DataParallel(maskRCNN, cpu_keywords=['im_info', 'roidb'],
-                                     minibatch=True)
-
-    if cfg.CUDA:
-        maskRCNN.cuda()
-
     ### Optimizer ###
     bias_params = []
     nonbias_params = []
@@ -266,6 +248,28 @@ def main():
         optimizer = torch.optim.Adam(params)
 
     lr = cfg.SOLVER.BASE_LR  # for display in command line
+
+    ### Load checkpoint
+    if args.load_ckpt:
+        load_name = args.load_ckpt
+        logging.info("loading checkpoint %s", load_name)
+        checkpoint = torch.load(load_name)
+        maskRCNN.load_state_dict(checkpoint['model'])
+        if args.resume_epoch:
+            optimizer.load_state_dict(checkpoint['optimizer'])
+            args.start_epoch = checkpoint['epoch'] + 1
+            assert checkpoint['step'] + 1 == checkpoint['iters_per_epoch'] * args.batch_size
+
+    if args.load_detectron:  #TODO resume for detectron weights (load sgd momentum values)
+        logging.info("loading Detectron weights %s", args.load_detectron)
+        load_detectron_weight(maskRCNN, args.load_detectron)
+
+    if args.mGPUs:
+        maskRCNN = mynn.DataParallel(maskRCNN, cpu_keywords=['im_info', 'roidb'],
+                                     minibatch=True)
+
+    if cfg.CUDA:
+        maskRCNN.cuda()
 
     ### Training Setups ###
     run_name = misc_utils.get_run_name()
