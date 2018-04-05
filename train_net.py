@@ -258,7 +258,7 @@ def main():
         if args.resume_epoch:
             optimizer.load_state_dict(checkpoint['optimizer'])
             args.start_epoch = checkpoint['epoch'] + 1
-            assert checkpoint['step'] + 1 == checkpoint['iters_per_epoch'] * args.batch_size
+            assert checkpoint['step'] + 1 == train_size // args.batch_size
 
     if args.load_detectron:  #TODO resume for detectron weights (load sgd momentum values)
         logging.info("loading Detectron weights %s", args.load_detectron)

@@ -614,6 +614,9 @@ __C.MRCNN.CONV_INIT = 'GaussianFill'
 # predictions)
 __C.MRCNN.CLS_SPECIFIC_MASK = True
 
+# Multi-task loss weight for masks
+__C.MRCNN.WEIGHT_LOSS_MASK = 1.0
+
 # Binarization threshold for converting soft masks to hard masks
 __C.MRCNN.THRESH_BINARIZE = 0.5
 
