@@ -224,6 +224,9 @@ def main():
     ### Model ###
     maskRCNN = Generalized_RCNN(train=True)
 
+    if cfg.CUDA:
+        maskRCNN.cuda()
+
     ### Optimizer ###
     bias_params = []
     nonbias_params = []
@@ -253,12 +256,17 @@ def main():
     if args.load_ckpt:
         load_name = args.load_ckpt
         logging.info("loading checkpoint %s", load_name)
-        checkpoint = torch.load(load_name)
+        checkpoint = torch.load(load_name, map_location=lambda storage, loc: storage)
         maskRCNN.load_state_dict(checkpoint['model'])
         if args.resume_epoch:
-            optimizer.load_state_dict(checkpoint['optimizer'])
+            # There is a bug in optimizer.load_state_dict on Pytorch 0.3.1.
+            # However it's fixed on master.
+            # optimizer.load_state_dict(checkpoint['optimizer'])
+            misc_utils.load_optimizer_state_dict(optimizer, checkpoint['optimizer'])
             args.start_epoch = checkpoint['epoch'] + 1
             assert checkpoint['step'] + 1 == train_size // args.batch_size
+        del checkpoint
+        torch.cuda.empty_cache()
 
     if args.load_detectron:  #TODO resume for detectron weights (load sgd momentum values)
         logging.info("loading Detectron weights %s", args.load_detectron)
@@ -267,9 +275,6 @@ def main():
     if args.mGPUs:
         maskRCNN = mynn.DataParallel(maskRCNN, cpu_keywords=['im_info', 'roidb'],
                                      minibatch=True)
-
-    if cfg.CUDA:
-        maskRCNN.cuda()
 
     ### Training Setups ###
     run_name = misc_utils.get_run_name()
