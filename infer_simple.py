@@ -64,7 +64,7 @@ def parse_args():
     parser.add_argument(
         '--output_dir',
         help='directory to save demo results',
-        default="mask_vis")
+        default="vis_outputs")
     parser.add_argument(
         '--merge_pdfs', type=distutils.util.strtobool, default=True)
 

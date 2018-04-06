@@ -42,10 +42,6 @@ __C.TRAIN.SCALES = (600, )
 # Max pixel size of the longest side of a scaled input image
 __C.TRAIN.MAX_SIZE = 1000
 
-# Trim size for input images to create minibatch #TODO: deprecate
-__C.TRAIN.TRIM_HEIGHT = 600
-__C.TRAIN.TRIM_WIDTH = 600
-
 # Images *per GPU* in the training minibatch
 # Total images per minibatch = TRAIN.IMS_PER_BATCH * NUM_GPUS
 __C.TRAIN.IMS_PER_BATCH = 2
@@ -158,6 +154,18 @@ __C.TRAIN.GT_MIN_AREA = -1
 # Freeze the backbone architecture during training if set to True
 __C.TRAIN.FREEZE_CONV_BODY = False
 
+
+# ---------------------------------------------------------------------------- #
+# Data loader options
+# ---------------------------------------------------------------------------- #
+__C.DATA_LOADER = AttrDict()
+
+# Number of Python threads to use for the data loader (warning: using too many
+# threads can cause GIL-based interference with Python Ops leading to *slower*
+# training; 4 seems to be the sweet spot in our experience)
+__C.DATA_LOADER.NUM_THREADS = 4
+
+
 # ---------------------------------------------------------------------------- #
 # Inference ('test') options
 # ---------------------------------------------------------------------------- #
@@ -265,6 +273,11 @@ __C.TEST.BBOX_VOTE.SCORING_METHOD_BETA = 1.0
 # Model options
 # ---------------------------------------------------------------------------- #
 __C.MODEL = AttrDict()
+
+# The type of model to use
+# The string must match a function in the modeling.model_builder module
+# (e.g., 'generalized_rcnn', 'mask_rcnn', ...)
+__C.MODEL.TYPE = ''
 
 # The backbone conv body to use
 __C.MODEL.CONV_BODY = ''
@@ -774,6 +787,9 @@ __C.EPS = 1e-14
 # Root directory of project
 __C.ROOT_DIR = osp.abspath(osp.join(osp.dirname(__file__), '..', '..'))
 
+# Output basedir
+__C.OUTPUT_DIR = '/tmp'
+
 # Name (or path to) the matlab executable
 __C.MATLAB = 'matlab'
 
@@ -791,7 +807,7 @@ __C.EXPECTED_RESULTS = []
 __C.EXPECTED_RESULTS_RTOL = 0.1
 __C.EXPECTED_RESULTS_ATOL = 0.005
 # Set to send email in case of an EXPECTED_RESULTS failure
-__C.EXPECTED_RESULTS_EMAIL = b''
+__C.EXPECTED_RESULTS_EMAIL = ''
 
 # ------------------------------
 # Data directory

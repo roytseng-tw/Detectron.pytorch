@@ -73,8 +73,9 @@ def parse_args():
         help='Explicitly specify to overwrite the value comed from cfg_file.',
         type=int)
     parser.add_argument(
-        '--nw', dest='num_workers', help='number of worker to load data',
-        default=10, type=int)
+        '--nw', dest='num_workers',
+        help='Explicitly specify to overwrite number of workers to load data. Defaults to 4',
+        type=int)
 
     parser.add_argument(
         '--o', dest='optimizer', help='Training optimizer.',
@@ -133,7 +134,7 @@ def save(output_dir, args, epoch, step, model, optimizer, iters_per_epoch):
     ckpt_dir = os.path.join(output_dir, 'ckpt')
     if not os.path.exists(ckpt_dir):
         os.makedirs(ckpt_dir)
-    save_name = os.path.join(ckpt_dir, 'mask_rcnn_{}_{}.pth'.format(epoch, step))
+    save_name = os.path.join(ckpt_dir, 'model_{}_{}.pth'.format(epoch, step))
     if args.mGPUs:
         model = model.module
     torch.save({
@@ -179,6 +180,10 @@ def main():
         original_batch_size, args.batch_size))
     print('NUM_GPUs: %d, TRAIN.IMS_PER_BATCH: %d' % (cfg.NUM_GPUS, cfg.TRAIN.IMS_PER_BATCH))
 
+    if args.num_workers is not None:
+        cfg.DATA_LOADER.NUM_THREADS = args.num_workers
+    print('Number of data loading threads: %d' % cfg.DATA_LOADER.NUM_THREADS)
+
     ### Adjust learning based on batch size change linearly
     old_base_lr = cfg.SOLVER.BASE_LR
     cfg.SOLVER.BASE_LR *= args.batch_size / original_batch_size
@@ -216,7 +221,7 @@ def main():
         dataset,
         batch_size=args.batch_size,
         sampler=sampler,
-        num_workers=args.num_workers,
+        num_workers=cfg.DATA_LOADER.NUM_THREADS,
         collate_fn=collate_minibatch)
 
     assert_and_infer_cfg()

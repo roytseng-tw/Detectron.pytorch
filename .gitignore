@@ -9,7 +9,6 @@ data/*
 notebooks/*.pkl
 
 /Outputs
-/mask_vis
 
 # ------------------------------
 
