@@ -16,8 +16,8 @@
 
 With this code, you can...
 
-1. **train your mask-rcnn from scratch.**
-2. **inference using the pretrained weight file (*.pkl) from Detectron.**
+1. **Train your mask-rcnn from scratch.**
+2. **Inference using the pretrained weight file (*.pkl) from Detectron.**
 
 This repository is originaly built on [jwyang/faster-rcnn.pytorch](https://github.com/jwyang/faster-rcnn.pytorch). However, after many modifications, the structure changes a lot and it's now more similar to [Detectron](https://github.com/facebookresearch/Detectron). I on purposely make everything similiar/identical to Detectron, so as to reproduce the result directly from official pretrained weight files.
 
