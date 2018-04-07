@@ -7,9 +7,6 @@ import torch.nn.functional as F
 from torch.autograd import Variable
 
 from core.config import cfg
-from model.roi_pooling.modules.roi_pool import _RoIPooling
-from model.roi_crop.modules.roi_crop import _RoICrop
-from modeling.roi_xfrom.roi_align.modules.roi_align import RoIAlign
 from model.roi_pooling.functions.roi_pool import RoIPoolFunction
 from model.roi_crop.functions.roi_crop import RoICropFunction
 from modeling.roi_xfrom.roi_align.functions.roi_align import RoIAlignFunction
@@ -54,7 +51,6 @@ class Generalized_RCNN(nn.Module):
         self.Conv_Body = get_func(cfg.MODEL.CONV_BODY)()
 
         # Region Proposal Network
-        # self.RPN = _RPN(self.Conv_Body.dim_out)
         self.RPN = rpn_heads.Single_Scale_RPN_Outputs(
             self.Conv_Body.dim_out, self.Conv_Body.spatial_scale)
 
