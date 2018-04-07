@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import torch.nn.init as init
 from torch.autograd import Variable
 
 from core.config import cfg
@@ -15,6 +16,14 @@ class fast_rcnn_outputs(nn.Module):
             self.bbox_pred = nn.Linear(dim_in, 4)
         else:
             self.bbox_pred = nn.Linear(dim_in, 4 * cfg.MODEL.NUM_CLASSES)
+
+        self._init_weights()
+
+    def _init_weights(self):
+        init.normal(self.cls_score.weight, std=0.01)
+        init.constant(self.cls_score.bias, 0)
+        init.normal(self.bbox_pred, std=0.001)
+        init.constant(self.bbox_pred, 0)
 
     def detectron_weight_mapping(self):
         detectron_weight_mapping = {

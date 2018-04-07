@@ -35,6 +35,8 @@ class keypoint_outputs(nn.Module):
             #TODO Detectron use conv with bilinear-interpolation-initialized weight
             self.upsample = nn.UpsamplingBilinear2d(scale_factor=cfg.KRCNN.UP_SCALE)
 
+        self._init_weights()
+
     def _init_weights(self):
         if cfg.KRCNN.USE_DECONV:
             init.normal(self.deconv.weight, std=0.01)
