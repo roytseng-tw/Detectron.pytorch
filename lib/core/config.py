@@ -824,6 +824,8 @@ __C.CROP_RESIZE_WITH_MAX_POOL = True
 # [Infered value]
 __C.CUDA = False
 
+__C.DEBUG = False
+
 
 def assert_and_infer_cfg(make_immutable=True):
     """Call this function in your script after you have finished setting all cfg
