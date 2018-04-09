@@ -55,16 +55,6 @@ def parse_args():
     parser.add_argument(
         '--no_cuda', dest='cuda', help='Do not use CUDA device', action='store_false')
 
-    # Epoch
-    parser.add_argument(
-        '--start_epoch',
-        help='Starting epoch count. Epoch is 0-indexed.',
-        default=0, type=int)
-    parser.add_argument(
-        '--epochs', dest='num_epochs',
-        help='Number of epochs to train',
-        default=6, type=int)
-
     # Optimization
     # These options has the highest prioity and can overwrite the values in config file
     # or values set by set_cfgs. `None` means do not overwrite.
@@ -93,6 +83,16 @@ def parse_args():
              'Decay happens on the beginning of a epoch. '
              'Epoch is 0-indexed.',
         default=[4, 5], nargs='+', type=int)
+
+    # Epoch
+    parser.add_argument(
+        '--start_epoch',
+        help='Starting epoch count. Epoch is 0-indexed.',
+        default=0, type=int)
+    parser.add_argument(
+        '--epochs', dest='num_epochs',
+        help='Number of epochs to train',
+        default=6, type=int)
 
     # Resume training TODO: add resume training mechanism
     parser.add_argument(
@@ -172,6 +172,8 @@ def main():
 
     ### Adaptively adjust some configs ###
     original_batch_size = cfg.NUM_GPUS * cfg.TRAIN.IMS_PER_BATCH
+    if args.batch_size is None:
+        args.batch_size = original_batch_size
     cfg.NUM_GPUS = torch.cuda.device_count()
     assert (args.batch_size % cfg.NUM_GPUS) == 0, \
         'batch_size: %d, NUM_GPUS: %d' % (args.batch_size, cfg.NUM_GPUS)
@@ -198,8 +200,7 @@ def main():
     if args.lr_decay_gamma is not None:
         cfg.SOLVER.GAMMA = args.lr_decay_gamma
 
-    if cfg.NUM_GPUS > 1:
-        args.mGPUs = True
+    args.mGPUs = (cfg.NUM_GPUS > 1)
 
     timers = defaultdict(Timer)
 
@@ -277,9 +278,8 @@ def main():
         logging.info("loading Detectron weights %s", args.load_detectron)
         load_detectron_weight(maskRCNN, args.load_detectron)
 
-    if args.mGPUs:
-        maskRCNN = mynn.DataParallel(maskRCNN, cpu_keywords=['im_info', 'roidb'],
-                                     minibatch=True)
+    maskRCNN = mynn.DataParallel(maskRCNN, cpu_keywords=['im_info', 'roidb'],
+                                 minibatch=True)
 
     ### Training Setups ###
     run_name = misc_utils.get_run_name()
@@ -369,7 +369,7 @@ def main():
                           % (run_name, epoch, step, iters_per_epoch))
                     print("\t\tloss: %.4f, lr: %.2e" % (loss_avg, lr))
                     print("\t\tfg/bg=(%d/%d), time cost: %f" % (fg_cnt, bg_cnt, diff))
-                    print("\t\trpn_cls: %.4f, rpn_bbox: %.4f, rcnn_cls: %.4f,"
+                    print("\t\trpn_cls: %.4f, rpn_bbox: %.4f, rcnn_cls: %.4f, "
                           "rcnn_bbox %.4f, rcnn_mask %.4f"
                           % (loss_rpn_cls, loss_rpn_bbox, loss_rcnn_cls,
                              loss_rcnn_bbox, loss_rcnn_mask))

@@ -11,6 +11,12 @@ logger = logging.getLogger(__name__)
 
 
 def smooth_l1_loss(bbox_pred, bbox_targets, bbox_inside_weights, bbox_outside_weights, beta=1.0):
+    """
+    SmoothL1(x) = 0.5 * x^2 / beta      if |x| < beta
+                  |x| - 0.5 * beta      otherwise.
+    1 / N * sum_i alpha_out[i] * SmoothL1(alpha_in[i] * (y_hat[i] - y[i])).
+    N is the number of batch elements in the input predictions
+    """
     box_diff = bbox_pred - bbox_targets
     in_box_diff = bbox_inside_weights * box_diff
     abs_in_box_diff = torch.abs(in_box_diff)

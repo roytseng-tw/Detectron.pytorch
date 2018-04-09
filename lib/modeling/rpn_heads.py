@@ -117,11 +117,13 @@ def single_scale_rpn_losses(
         B, C, H, W = rpn_cls_logits.size()
         rpn_cls_logits = rpn_cls_logits.view(B, 2, C / 2, H, W).permute(0, 2, 3, 4, 1).view(-1, 2)
         rpn_labels_int32 = rpn_labels_int32.view(-1).long()
-        loss_rpn_cls = F.cross_entropy(rpn_cls_logits, rpn_labels_int32, ignore_index=-1)
+        loss_rpn_cls = F.cross_entropy(rpn_cls_logits, rpn_labels_int32, ignore_index=-1, size_average=False)
+        loss_rpn_cls /= (rpn_labels_int32 >= 0).sum().float()
     else:
-        weight = (rpn_labels_int32 != -1).float()
+        weight = (rpn_labels_int32 >= 0).float()
         loss_rpn_cls = F.binary_cross_entropy_with_logits(
-            rpn_cls_logits, rpn_labels_int32.float(), weight)
+            rpn_cls_logits, rpn_labels_int32.float(), weight, size_average=False)
+        loss_rpn_cls /= weight.sum()
 
     loss_rpn_bbox = net_utils.smooth_l1_loss(
         rpn_bbox_pred, rpn_bbox_targets, rpn_bbox_inside_weights, rpn_bbox_outside_weights,
