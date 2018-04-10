@@ -13,25 +13,24 @@ from utils.resnet_weights_helper import convert_state_dict
 # Bits for specific architectures (ResNet50, ResNet101, ...)
 # ---------------------------------------------------------------------------- #
 
-
-def ResNet50_Conv4_Body():
-    return ResNet_ConvX_Body((3, 4, 6))
-
-
-def ResNet50_Conv5_Body():
-    return ResNet_ConvX_Body((3, 4, 6, 3))
+def ResNet50_conv4_body():
+    return ResNet_convX_body((3, 4, 6))
 
 
-def ResNet101_Conv4_Body():
-    return ResNet_ConvX_Body((3, 4, 23))
+def ResNet50_conv5_body():
+    return ResNet_convX_body((3, 4, 6, 3))
 
 
-def ResNet101_Conv5_Body():
-    return ResNet_ConvX_Body((3, 4, 23, 3))
+def ResNet101_conv4_body():
+    return ResNet_convX_body((3, 4, 23))
 
 
-def ResNet152_Conv5_Body():
-    return ResNet_ConvX_Body((3, 8, 36, 3))
+def ResNet101_conv5_body():
+    return ResNet_convX_body((3, 4, 23, 3))
+
+
+def ResNet152_conv5_body():
+    return ResNet_convX_body((3, 8, 36, 3))
 
 
 # ---------------------------------------------------------------------------- #
@@ -39,7 +38,7 @@ def ResNet152_Conv5_Body():
 # ---------------------------------------------------------------------------- #
 
 
-class ResNet_ConvX_Body(nn.Module):
+class ResNet_convX_body(nn.Module):
     def __init__(self, block_counts):
         super().__init__()
         self.block_counts = block_counts
@@ -112,7 +111,7 @@ class ResNet_ConvX_Body(nn.Module):
         return x
 
 
-class ResNet_Roi_Conv5_Head(nn.Module):
+class ResNet_roi_conv5_head(nn.Module):
     def __init__(self, dim_in, roi_xform_func, spatial_scale):
         super().__init__()
         self.roi_xform = roi_xform_func
