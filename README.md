@@ -187,10 +187,10 @@ Download them and put them into the `{repo_root}/data/pretrained_model`.
 - Resume training with exactly same settings from the end of an epoch
 
   ```bash
-  python train_net.py --dataset coco2017 --cfg cfgs/e2e_mask_rcnn_R-50-C4.yml --resume_epoch --load_ckpt {path/to/the/checkpoint}
+  python train_net.py --dataset coco2017 --cfg cfgs/e2e_mask_rcnn_R-50-C4.yml --resume --load_ckpt {path/to/the/checkpoint}
   ```
 
-  **The difference of w/ and w/o `--resume_epoch`**: Optimizer state will be loaded from the checkpoint file wtih `--resume_epoch`. Otherwise, not.
+  **The difference of w/ and w/o `--resume`**: Optimizer state will be loaded from the checkpoint file if  `--resume` is specified. Otherwise, not.
 
 - Fine tune from the Detectron pretrained weights
 
@@ -198,7 +198,7 @@ Download them and put them into the `{repo_root}/data/pretrained_model`.
   python train_net.py --dataset coco2017 --cfg cfgs/e2e_mask_rcnn_R-50-C4.yml --load_detectron {path/to/detectron/weight}
   ```
 
-  **NOTE**: optimizer state (momentums for SGD) are not loaded. (To be implement)
+  **NOTE**: optimizer state (momentums for SGD) are not loaded. (To be implemented)
 
 ## Inference
 

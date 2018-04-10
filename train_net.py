@@ -86,6 +86,10 @@ def parse_args():
 
     # Epoch
     parser.add_argument(
+        '--start_iter',
+        help='Starting iteration for first training epoch. 0-indexed.',
+        default=0, type=int)
+    parser.add_argument(
         '--start_epoch',
         help='Starting epoch count. Epoch is 0-indexed.',
         default=0, type=int)
@@ -94,10 +98,10 @@ def parse_args():
         help='Number of epochs to train',
         default=6, type=int)
 
-    # Resume training TODO: add resume training mechanism
+    # Resume training: requires same iterations per epoch
     parser.add_argument(
-        '--resume_epoch',
-        help='resume to training on checkpoint at the end of an epoch',
+        '--resume',
+        help='resume to training on a checkpoint',
         action='store_true')
 
     # Checkpoint and Logging
@@ -256,27 +260,36 @@ def main():
     elif cfg.SOLVER.TYPE == "Adam":
         optimizer = torch.optim.Adam(params)
 
-    lr = cfg.SOLVER.BASE_LR  # for display in command line
-
     ### Load checkpoint
     if args.load_ckpt:
         load_name = args.load_ckpt
         logging.info("loading checkpoint %s", load_name)
         checkpoint = torch.load(load_name, map_location=lambda storage, loc: storage)
         maskRCNN.load_state_dict(checkpoint['model'])
-        if args.resume_epoch:
+        if args.resume:
+            assert checkpoint['iters_per_epoch'] == train_size // args.batch_size, \
+                "iters_per_epoch should match for resume"
             # There is a bug in optimizer.load_state_dict on Pytorch 0.3.1.
             # However it's fixed on master.
             # optimizer.load_state_dict(checkpoint['optimizer'])
             misc_utils.load_optimizer_state_dict(optimizer, checkpoint['optimizer'])
-            args.start_epoch = checkpoint['epoch'] + 1
-            assert checkpoint['step'] + 1 == train_size // args.batch_size
+            if checkpoint['step'] == (checkpoint['iters_per_epoch'] - 1):
+                # Resume from end of an epoch
+                args.start_epoch = checkpoint['epoch'] + 1
+                args.start_iter = 0
+            else:
+                # Resume from the middle of an epoch.
+                # NOTE: dataloader is not synced with previous state
+                args.start_epoch = checkpoint['epoch']
+                args.start_iter = checkpoint['step'] + 1
         del checkpoint
         torch.cuda.empty_cache()
 
     if args.load_detectron:  #TODO resume for detectron weights (load sgd momentum values)
         logging.info("loading Detectron weights %s", args.load_detectron)
         load_detectron_weight(maskRCNN, args.load_detectron)
+
+    lr = optimizer.param_groups[0]['lr']  # lr of non-bias parameters, for commmand line outputs.
 
     maskRCNN = mynn.DataParallel(maskRCNN, cpu_keywords=['im_info', 'roidb'],
                                  minibatch=True)
@@ -317,7 +330,7 @@ def main():
                 net_utils.decay_learning_rate(optimizer, lr, cfg.SOLVER.GAMMA)
                 lr *= cfg.SOLVER.GAMMA
 
-            for step, input_data in zip(range(iters_per_epoch), dataloader):
+            for step, input_data in zip(range(args.start_iter, iters_per_epoch), dataloader):
 
                 for key in input_data:
                     if key != 'roidb': # roidb is a list of ndarrays with inconsistent length
@@ -353,37 +366,38 @@ def main():
                     save(output_dir, args, epoch, step, maskRCNN, optimizer, iters_per_epoch)
 
                 if (step+1) % args.disp_interval == 0:
-                    diff = timers['train_loop'].toc(average=False)
-                    if step > 0:
+                    if (step + 1 - args.start_iter) >= args.disp_interval:  # for the case of resume
+                        diff = timers['train_loop'].toc(average=False)
                         loss_avg /= args.disp_interval
 
-                    loss_rpn_cls = loss_rpn_cls.data[0]
-                    loss_rpn_bbox = loss_rpn_bbox.data[0]
-                    loss_rcnn_cls = loss_rcnn_cls.data[0]
-                    loss_rcnn_bbox = loss_rcnn_bbox.data[0]
-                    loss_rcnn_mask = loss_rcnn_mask.data[0]
-                    fg_cnt = torch.sum(rois_label.data.ne(0))
-                    bg_cnt = rois_label.data.numel() - fg_cnt
+                        loss_rpn_cls = loss_rpn_cls.data[0]
+                        loss_rpn_bbox = loss_rpn_bbox.data[0]
+                        loss_rcnn_cls = loss_rcnn_cls.data[0]
+                        loss_rcnn_bbox = loss_rcnn_bbox.data[0]
+                        loss_rcnn_mask = loss_rcnn_mask.data[0]
+                        fg_cnt = torch.sum(rois_label.data.ne(0))
+                        bg_cnt = rois_label.data.numel() - fg_cnt
 
-                    print("[%s][epoch %2d][iter %4d / %4d]"
-                          % (run_name, epoch, step, iters_per_epoch))
-                    print("\t\tloss: %.4f, lr: %.2e" % (loss_avg, lr))
-                    print("\t\tfg/bg=(%d/%d), time cost: %f" % (fg_cnt, bg_cnt, diff))
-                    print("\t\trpn_cls: %.4f, rpn_bbox: %.4f, rcnn_cls: %.4f, "
-                          "rcnn_bbox %.4f, rcnn_mask %.4f"
-                          % (loss_rpn_cls, loss_rpn_bbox, loss_rcnn_cls,
-                             loss_rcnn_bbox, loss_rcnn_mask))
-                    if args.use_tfboard:
-                        info = {
-                            'loss': loss_avg,
-                            'loss_rpn_cls': loss_rpn_cls,
-                            'loss_rpn_box': loss_rpn_bbox,
-                            'loss_rcnn_cls': loss_rcnn_cls,
-                            'loss_rcnn_box': loss_rcnn_bbox,
-                            'loss_rcnn_mask': loss_rcnn_mask
-                        }
-                        for tag, value in info.items():
-                            tblogger.add_scalar(tag, value, iters_per_epoch * epoch + step)
+                        print("[%s][epoch %2d][iter %4d / %4d]"
+                              % (run_name, epoch, step, iters_per_epoch))
+                        print("\t\tloss_avg: %.4f, lr: %.2e" % (loss_avg, lr))
+                        print("\t\tfg/bg=(%d/%d), time cost/%d iters: %.2f (secs)"
+                              % (fg_cnt, bg_cnt, args.disp_interval, diff))
+                        print("\t\trpn_cls: %.4f, rpn_bbox: %.4f, rcnn_cls: %.4f, "
+                            "rcnn_bbox %.4f, rcnn_mask %.4f"
+                            % (loss_rpn_cls, loss_rpn_bbox, loss_rcnn_cls,
+                                loss_rcnn_bbox, loss_rcnn_mask))
+                        if args.use_tfboard:
+                            info = {
+                                'loss_avg': loss.data[0],
+                                'loss_rpn_cls': loss_rpn_cls,
+                                'loss_rpn_box': loss_rpn_bbox,
+                                'loss_rcnn_cls': loss_rcnn_cls,
+                                'loss_rcnn_box': loss_rcnn_bbox,
+                                'loss_rcnn_mask': loss_rcnn_mask
+                            }
+                            for tag, value in info.items():
+                                tblogger.add_scalar(tag, value, iters_per_epoch * epoch + step)
 
                     loss_avg = 0
                     timers['train_loop'].tic()
@@ -393,6 +407,8 @@ def main():
             save(output_dir, args, epoch, step, maskRCNN, optimizer, iters_per_epoch)
             # reset timer
             timers['train_loop'].reset()
+            # reset starting iter number after first epoch
+            args.start_iter = 0
 
     except (RuntimeError, KeyboardInterrupt) as e:
         print('Save on exception:', e)
