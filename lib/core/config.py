@@ -323,8 +323,15 @@ __C.MODEL.KEYPOINTS_ON = False
 # proposals (i.e., it outputs proposals ONLY, no actual object detections)
 __C.MODEL.RPN_ONLY = False
 
-# Indicate whether the res5 stage forward computation is shared or not on training
+# [Inferred value; do not set directly in a config]
+# Indicate whether the res5 stage weights and training forward computation
+# are shared from box head or not.
 __C.MODEL.SHARE_RES5 = False
+
+# Whether to load imagenet pretrained weights
+# If True, path to the weight file must be specified.
+# See: __C.RESNETS.IMAGENET_PRETRAINED_WEIGHTS
+__C.MODEL.LOAD_IMAGENET_PRETRAINED_WEIGHTS = True
 
 
 # ---------------------------------------------------------------------------- #
@@ -749,8 +756,10 @@ __C.RESNETS.RES5_DILATION = 1
 # be fixed.
 __C.RESNETS.FREEZE_AT = 2
 
-# Whether to load pretrained weight with ImageNet
-__C.RESNETS.IMAGENET_PRETRAINED = True
+# Path to pretrained resnet weights on ImageNet.
+# If start with '/', then it is treated as a absolute path.
+# Otherwise, treat as a relative path to __C.ROOT_DIR
+__C.RESNETS.IMAGENET_PRETRAINED_WEIGHTS = ''
 
 
 # ---------------------------------------------------------------------------- #
@@ -827,6 +836,17 @@ __C.CUDA = False
 __C.DEBUG = False
 
 
+# ---------------------------------------------------------------------------- #
+# mask heads or keypoint heads that share res5 stage weights and
+# training forward computation with box head.
+# ---------------------------------------------------------------------------- #
+_SHARE_RES5_HEADS = set(
+    [
+        'mask_rcnn_heads.mask_rcnn_fcn_head_v0upshare',
+    ]
+)
+
+
 def assert_and_infer_cfg(make_immutable=True):
     """Call this function in your script after you have finished setting all cfg
     values that are necessary (e.g., merging a config from a file, merging
@@ -839,6 +859,11 @@ def assert_and_infer_cfg(make_immutable=True):
         __C.RPN.RPN_ON = True
     if __C.RPN.RPN_ON or __C.RETINANET.RETINANET_ON:
         __C.TEST.PRECOMPUTED_PROPOSALS = False
+    if __C.MODEL.LOAD_IMAGENET_PRETRAINED_WEIGHTS:
+        assert __C.RESNETS.IMAGENET_PRETRAINED_WEIGHTS, \
+            "Path to the weight file must not be empty to load imagenet pertrained resnets."
+    if set([__C.MRCNN.ROI_MASK_HEAD, __C.KRCNN.ROI_KEYPOINTS_HEAD]) & _SHARE_RES5_HEADS:
+        __C.MODEL.SHARE_RES5 = True
     if make_immutable:
         cfg.immutable(True)
 

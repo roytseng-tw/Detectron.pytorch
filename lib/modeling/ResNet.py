@@ -52,20 +52,16 @@ class ResNet_convX_body(nn.Module):
                          ('maxpool', nn.MaxPool2d(kernel_size=3, stride=2, padding=1))]))
         dim_in = 64
         dim_bottleneck = cfg.RESNETS.NUM_GROUPS * cfg.RESNETS.WIDTH_PER_GROUP
-        self.res2, dim_in = _make_layer(Bottleneck, dim_in, dim_bottleneck,
-                                        block_counts[0])
-        self.res3, dim_in = _make_layer(
-            Bottleneck, dim_in, dim_bottleneck * 2, block_counts[1], stride=2)
-        self.res4, dim_in = _make_layer(
-            Bottleneck, dim_in, dim_bottleneck * 4, block_counts[2], stride=2)
+        self.res2, dim_in = add_stage(dim_in, dim_bottleneck, block_counts[0])
+        self.res3, dim_in = add_stage(dim_in, dim_bottleneck * 2, block_counts[1], stride=2)
+        self.res4, dim_in = add_stage(dim_in, dim_bottleneck * 4, block_counts[2], stride=2)
         if len(block_counts) == 4:
             if cfg.RESNETS.RES5_DILATION != 1:
                 stride = 1
             else:
                 stride = 2
-            self.res5, dim_in = _make_layer(
-                Bottleneck, dim_in, dim_bottleneck * 8, block_counts[3],
-                stride, cfg.RESNETS.RES5_DILATION)
+            self.res5, dim_in = add_stage(dim_in, dim_bottleneck * 8, block_counts[3],
+                                          stride, cfg.RESNETS.RES5_DILATION)
             self.spatial_scale = 1 / 32 * cfg.RESNETS.RES5_DILATION
         else:
             self.spatial_scale = 1 / 16  # final feature scale wrt. original image scale
@@ -119,8 +115,7 @@ class ResNet_roi_conv5_head(nn.Module):
 
         dim_bottleneck = cfg.RESNETS.NUM_GROUPS * cfg.RESNETS.WIDTH_PER_GROUP
         stride_init = cfg.FAST_RCNN.ROI_XFORM_RESOLUTION // 7
-        self.res5, self.dim_out = _make_layer(Bottleneck, dim_in, dim_bottleneck * 8, 3,
-                                              stride_init)
+        self.res5, self.dim_out = add_stage(dim_in, dim_bottleneck * 8, 3, stride_init)
         assert self.dim_out == 2048
         self.avgpool = nn.AvgPool2d(7)
 
@@ -148,7 +143,6 @@ class ResNet_roi_conv5_head(nn.Module):
 # ---------------------------------------------------------------------------- #
 # Helper functions and components
 # ---------------------------------------------------------------------------- #
-
 
 def residual_stage_detectron_mapping(module_ref, module_name, num_blocks, res_id):
     """Construct weight mapping relation for a residual stage with `num_blocks` of
@@ -192,44 +186,45 @@ def freeze_params(m):
         p.requires_grad = False
 
 
-def _make_layer(block, inplanes, planes, blocks, stride=1, dilation=1):
-    """Make a number of [blocks] residual blocks.
+def add_stage(inplanes, planes, nblocks, stride=1, dilation=1):
+    """Make a stage consist of `nblocks` residual blocks.
     Returns:
-        - a sequentail module of residual blocks
+        - stage module: an nn.Sequentail module of residual blocks
         - final output dimension
     """
+    block_func = globals()[cfg.RESNETS.TRANS_FUNC]
     downsample = None
-    if stride != 1 or inplanes != planes * block.expansion:
+    if stride != 1 or inplanes != planes * block_func.expansion:
         downsample = nn.Sequential(
             nn.Conv2d(
                 inplanes,
-                planes * block.expansion,
+                planes * block_func.expansion,
                 kernel_size=1,
                 stride=stride,
                 bias=False),
-            mynn.AffineChannel2d(planes * block.expansion),
+            mynn.AffineChannel2d(planes * block_func.expansion),
         )
 
     layers = []
     layers.append(
-        block(inplanes, planes, stride, dilation=dilation,
-              group=cfg.RESNETS.NUM_GROUPS,
-              downsample=downsample)
+        block_func(inplanes, planes, stride, dilation=dilation,
+                   group=cfg.RESNETS.NUM_GROUPS,
+                   downsample=downsample)
     )
-    inplanes = planes * block.expansion
-    for i in range(1, blocks):
-        layers.append(block(inplanes, planes, dilation=dilation))
+    inplanes = planes * block_func.expansion
+    for i in range(1, nblocks):
+        layers.append(block_func(inplanes, planes, dilation=dilation))
 
     return nn.Sequential(*layers), inplanes
 
 
-class Bottleneck(nn.Module):
+class bottleneck_transformation(nn.Module):
     """ Bottleneck Residual Block """
     expansion = 4
 
     def __init__(self, inplanes, planes, stride=1, dilation=1, group=1,
                  downsample=None):
-        super(Bottleneck, self).__init__()
+        super().__init__()
         # In original resnet, stride=2 is on 1x1.
         # In fb.torch resnet, stride=2 is on 3x3.
         (str1x1, str3x3) = (stride, 1) if cfg.RESNETS.STRIDE_1X1 else (1,

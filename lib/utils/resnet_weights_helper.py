@@ -2,7 +2,6 @@
 Helper functions for converting resnet pretrained weights from other formats
 """
 import os
-import re
 
 import torch
 
@@ -11,15 +10,13 @@ import utils.detectron_weight_helper as dwh
 from core.config import cfg
 
 
-def load_pretrained_imagenet_weights(num_layers, model):
+def load_pretrained_imagenet_weights(model):
     """Load pretrained weights
     Args:
         num_layers: 50 for res50 and so on.
         model: the generalized rcnnn module
     """
-    weights_file = os.path.join(
-        cfg.ROOT_DIR,
-        'data/pretrained_model/resnet%d_caffe.pth' % num_layers)
+    weights_file = os.path.join(cfg.ROOT_DIR, cfg.RESNETS.IMAGENET_PRETRAINED_WEIGHTS)
     pretrianed_state_dict = convert_state_dict(torch.load(weights_file))
 
     # Convert batchnorm weights
@@ -41,6 +38,7 @@ def load_pretrained_imagenet_weights(num_layers, model):
     pattern = dwh.resnet_weights_name_pattern()
 
     name_mapping, _ = model.detectron_weight_mapping()
+
     for k, v in name_mapping.items():
         if v is not None:
             if pattern.match(v):

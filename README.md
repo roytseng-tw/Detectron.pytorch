@@ -12,14 +12,14 @@
 
 </div>
 
-**This code basically follows the architecture in Detectron.** Only part of the functionality is supported. Check [Supports](#supports) section for more information.
+**This code follows the implementation architecture of Detectron.** Only part of the functionality is supported. Check [this section](#supported-network-modules) for more information.
 
 With this code, you can...
 
-1. **Train your mask-rcnn from scratch.**
+1. **Train your model from scratch.**
 2. **Inference using the pretrained weight file (*.pkl) from Detectron.**
 
-This repository is originaly built on [jwyang/faster-rcnn.pytorch](https://github.com/jwyang/faster-rcnn.pytorch). However, after many modifications, the structure changes a lot and it's now more similar to [Detectron](https://github.com/facebookresearch/Detectron). I on purposely make everything similiar/identical to Detectron, so as to reproduce the result directly from official pretrained weight files.
+This repository is originally built on [jwyang/faster-rcnn.pytorch](https://github.com/jwyang/faster-rcnn.pytorch). However, after many modifications, the structure changes a lot and it's now more similar to [Detectron](https://github.com/facebookresearch/Detectron). I deliberately make everything similar or identical to Detectron's implementation, so as to reproduce the result directly from official pretrained weight files.
 
 This implementation has the following features:
 
@@ -35,9 +35,7 @@ This implementation has the following features:
 
   Besides of that, I implement a customized `nn.DataParallel ` module which enables different batch blob size on different gpus. Check [My nn.DataParallel](#my-nn.dataparallel) section for more details about this.
 
-## Supports
-
-### Network modules
+## Supported Network modules
 
 - Backbone architecture: `ResNet50_conv4_body`, `ResNet50_conv5_body`, `ResNet101_Conv4_Body`, `ResNet101_Conv5_Body`, `ResNet152_Conv5_Body`
   - For now only resnet backbone is implemented. Plan to add FPN.
@@ -47,58 +45,70 @@ This implementation has the following features:
 
 **NOTE**: the naming is similar to the one used in Detectron. Just remove the prepending `add_` if it is present.
 
-### Datasets
+## Supported Datasets
 
 Only COCO is supported for now. However, the whole dataset library implementation is almost identical to Detectron's, so it should be easy to add more datasets supported by Detectron.
 
-### Config Options
+## Configuration Options
 
-The config file [lib/core/config.py](lib/core/config.py) *has almost all the options in Detectron's config file* with same default values. Model specific config files are under [cfgs](cfgs/).
+Architecture specific configuration files are put under [configs](configs/). The general configuration file [lib/core/config.py](lib/core/config.py) **has almost all the options with same default values as in Detectron's**, so it's effortless to transform the architecture specific configs from Detectron. 
 
-**Some options are not used** because the corresponding functionalities are not implemented yet. While, some are not use because I implement the program in different way. I deliberately keep the unused options from Detectron for the compatibility of model specific config files.
+### How to transform configuration files from Detectron
 
-Here are some options that have no effects and you have to take care about:
+1. Remove `TRAIN.WEIGHTS`, `TRAIN.DATASETS` and `TEST.DATASETS`
+2. For module type options (e.g `MODEL.CONV_BODY`, `FAST_RCNN.ROI_BOX_HEAD` ...), remove `add_` in the string if exists.
+3. If want to load ImageNet pretrained weights for the model, add `RESNETS.IMAGENET_PRETRAINED_WEIGHTS` pointing to the pretrained weight file. If not, set `MODEL.LOAD_IMAGENET_PRETRAINED_WEIGHTS` to `False`.
 
- - `SOLVER.LR_POLICY`, `SOLVER.MAX_ITER`, `SOLVER.STEPS`,`SOLVER.LRS`: For now, the training policy is controled by these command line arguments: 
+### Some more details
 
-    - **`--epochs`**: How many epochs to train. One epoch means one travel throught the whole training sets. Defaults to  6.
+**Some options are not used** because the corresponding functionalities are not implemented yet. While, some are not use because I implement the program in different way.
+
+Here are some options that have no effects and worth noticing:
+
+ - `SOLVER.LR_POLICY`, `SOLVER.MAX_ITER`, `SOLVER.STEPS`,`SOLVER.LRS`: For now, the training policy is controlled by these command line arguments: 
+
+    - **`--epochs`**: How many epochs to train. One epoch means one travel through the whole training sets. Defaults to  6.
     - **`--lr_decay_epochs `**: Epochs to decay the learning rate on. Decay happens on the beginning of a epoch. Epoch is 0-indexed. Defaults to [4, 5].
 
-   For more command lie arguments, please refer to `python train_net.py -—help`
+   For more command lie arguments, please refer to `python train_net.py --help`
 
 - `SOLVER.WARM_UP_ITERS`, `SOLVER.WARM_UP_FACTOR`, `SOLVER.WARM_UP_METHOD`: Training warm up in the paper [Accurate, Large Minibatch SGD: Training ImageNet in 1 Hour](https://arxiv.org/abs/1706.02677) is not implemented.
 
-- `OUTPUT_DIR`: This option appears in the model specific config file, but it has no effect. Use the command line argument **`--output_base_dir`** to specify the output directory for training.
+- `OUTPUT_DIR`: Use the command line argument **`--output_base_dir`** to specify the output directory instead.
 
 **While some more options are provided**:
 
-- `MODEL.SHARE_RES5 = False `: When use a mask head or a keypoint head that share the res5-stage weights with box head, you should set it to `True`. For now, the only head that shares the weights is `mask_rcnn_fcn_head_v0upshare`.
+- `MODEL.LOAD_IMAGENET_PRETRAINED_WEIGHTS = True`:  Whether to load ImageNet pretrained weights.
+  - `RESNETS.IMAGENET_PRETRAINED_WEIGHTS = ''`: Path to pretrained residual network weights. If start with `'/'`, then it is treated as a absolute path. Otherwise, treat as a relative path to `ROOT_DIR`.
 - `TRAIN.ASPECT_CROPPING = False`, `TRAIN.ASPECT_HI = 2`, `TRAIN.ASPECT_LO = 0.5`: Options for aspect cropping to restrict image aspect ratio range.
 - `RPN.OUT_DIM_AS_IN_DIM = True`, `RPN.OUT_DIM = 512`, `RPN.CLS_ACTIVATION = 'sigmoid'`: Official implement of RPN has same input and output feature channels and use sigmoid as the activation function for fg/bg class prediction. In [jwyang's implementation](https://github.com/jwyang/faster-rcnn.pytorch/blob/master/lib/model/rpn/rpn.py#L28), it fix output channel number to 512 and use softmax as activation function.
 
-### My nn.DataParallel
+## My nn.DataParallel
 
 TBA
 
-## Requirements
-Tested under python3.
-- python packages
-    - pytorch==0.3.1
-    - torchvision==0.2.0  
-    - numpy  
-    - scipy  
-    - opencv
-    - pyyaml
-    - [pycocotools](https://github.com/cocodataset/cocoapi)  — for COCO dataset, also available from pip.
-    - tensorboardX  — for logging the losses in Tensorboard
-
-- An NVIDAI GPU and CUDA 8.0 or higher. Some operations only have gpu implementation.
-
 ## Getting Started
-Clone the repo
-```
+Clone the repo:
+
+```bash
 git clone https://github.com/roytseng-tw/mask-rcnn.pytorch.git
 ```
+
+### Requirements
+
+Tested under python3.
+
+- python packages
+  - pytorch==0.3.1  (cuda80, cudnn7.1.2)
+  - torchvision==0.2.0  
+  - numpy  
+  - scipy  
+  - opencv
+  - pyyaml
+  - [pycocotools](https://github.com/cocodataset/cocoapi)  — for COCO dataset, also available from pip.
+  - tensorboardX  — for logging the losses in Tensorboard
+- An NVIDAI GPU and CUDA 8.0 or higher. Some operations only have gpu implementation.
+- **NOTICE**: different versions of Pytorch package have different memory usages.
 
 ### Compilation
 
@@ -214,5 +224,12 @@ TBA
 
 ## Visualization
 
-TBA
+- Train *e2e_mask_rcnn_R-50_C4* from scratch for 1 epoch on coco_train_2017 with batch size 4:
 
+  <img src="demo/e2e_mask_rcnn_R-50-C4/train_from_scratch_epoch1_bs4/img1.jpg" height="500px"/>
+
+  <img src="demo/e2e_mask_rcnn_R-50-C4/train_from_scratch_epoch1_bs4/img2.jpg" height="500px"/>
+
+  <img src="demo/e2e_mask_rcnn_R-50-C4/train_from_scratch_epoch1_bs4/img3.jpg" height="500px"/>
+
+  <img src="demo/e2e_mask_rcnn_R-50-C4/train_from_scratch_epoch1_bs4/img4.jpg" height="500px"/>

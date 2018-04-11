@@ -108,6 +108,7 @@ class mask_rcnn_fcn_head_v0upshare(nn.Module):
         self.spatial_scale = spatial_scale
         self.dim_out = cfg.MRCNN.DIM_REDUCED
         self.SHARE_RES5 = True
+        assert cfg.MODEL.SHARE_RES5
 
         self.res5 = None  # will be assigned later
         dim_conv5 = 2048
@@ -213,6 +214,5 @@ def ResNet_roi_conv5_head_for_masks(dim_in):
     """ResNet "conv5" / "stage5" head for predicting masks."""
     dilation = cfg.MRCNN.DILATION
     stride_init = cfg.MRCNN.ROI_XFORM_RESOLUTION // 7  # by default: 2
-    module, dim_out = ResNet._make_layer(ResNet.Bottleneck, dim_in, 512, 3,
-                                         stride_init, dilation)
+    module, dim_out = ResNet.add_stage(dim_in, 512, 3, stride_init, dilation)
     return module, dim_out
