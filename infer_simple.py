@@ -60,11 +60,11 @@ def parse_args():
         '--image_dir',
         dest='image_dir',
         help='directory to load images for demo',
-        default="images")
+        default="demo/sample_images")
     parser.add_argument(
         '--output_dir',
         help='directory to save demo results',
-        default="vis_outputs")
+        default="infer_outputs")
     parser.add_argument(
         '--merge_pdfs', type=distutils.util.strtobool, default=True)
 
