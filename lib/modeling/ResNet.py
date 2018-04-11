@@ -51,7 +51,7 @@ class ResNet_convX_body(nn.Module):
                          ('relu', nn.ReLU(inplace=True)),
                          ('maxpool', nn.MaxPool2d(kernel_size=3, stride=2, padding=1))]))
         dim_in = 64
-        dim_bottleneck = 64
+        dim_bottleneck = cfg.RESNETS.NUM_GROUPS * cfg.RESNETS.WIDTH_PER_GROUP
         self.res2, dim_in = _make_layer(Bottleneck, dim_in, dim_bottleneck,
                                         block_counts[0])
         self.res3, dim_in = _make_layer(
@@ -117,8 +117,9 @@ class ResNet_roi_conv5_head(nn.Module):
         self.roi_xform = roi_xform_func
         self.spatial_scale = spatial_scale
 
+        dim_bottleneck = cfg.RESNETS.NUM_GROUPS * cfg.RESNETS.WIDTH_PER_GROUP
         stride_init = cfg.FAST_RCNN.ROI_XFORM_RESOLUTION // 7
-        self.res5, self.dim_out = _make_layer(Bottleneck, dim_in, 512, 3,
+        self.res5, self.dim_out = _make_layer(Bottleneck, dim_in, dim_bottleneck * 8, 3,
                                               stride_init)
         assert self.dim_out == 2048
         self.avgpool = nn.AvgPool2d(7)
@@ -211,9 +212,10 @@ def _make_layer(block, inplanes, planes, blocks, stride=1, dilation=1):
 
     layers = []
     layers.append(
-        block(
-            inplanes, planes, stride, dilation=dilation,
-            downsample=downsample))
+        block(inplanes, planes, stride, dilation=dilation,
+              group=cfg.RESNETS.NUM_GROUPS,
+              downsample=downsample)
+    )
     inplanes = planes * block.expansion
     for i in range(1, blocks):
         layers.append(block(inplanes, planes, dilation=dilation))
@@ -225,7 +227,7 @@ class Bottleneck(nn.Module):
     """ Bottleneck Residual Block """
     expansion = 4
 
-    def __init__(self, inplanes, planes, stride=1, dilation=1,
+    def __init__(self, inplanes, planes, stride=1, dilation=1, group=1,
                  downsample=None):
         super(Bottleneck, self).__init__()
         # In original resnet, stride=2 is on 1x1.
@@ -243,6 +245,7 @@ class Bottleneck(nn.Module):
             stride=str3x3,
             padding=1 * dilation,
             dilation=dilation,
+            groups=group,
             bias=False)
         self.bn2 = mynn.AffineChannel2d(planes)
         self.conv3 = nn.Conv2d(
