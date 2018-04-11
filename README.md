@@ -206,7 +206,7 @@ Download them and put them into the `{repo_root}/data/pretrained_model`.
 python infer_simple.py --dataset coco --cfg cfgs/e2e_mask_rcnn_R-50-C4.yml --load_detectron {path/to/detectron/weight} --image_dir {dir/of/input/images}  --output_dir {dir/to/save/visualizations}
 ```
 
-`--image_dir ` defaults to `images`. `--output_dir` defaults to `vis_outputs`.
+`--image_dir ` defaults to `demo/sample_images`. `--output_dir` defaults to `infer_outputs`.
 
 ## Benchmark
 
@@ -217,9 +217,6 @@ TBA
 - Train *e2e_mask_rcnn_R-50_C4* from scratch for 1 epoch on coco_train_2017 with batch size 4:
 
   <img src="demo/e2e_mask_rcnn_R-50-C4/train_from_scratch_epoch1_bs4/img1.jpg" height="500px"/>
-
   <img src="demo/e2e_mask_rcnn_R-50-C4/train_from_scratch_epoch1_bs4/img2.jpg" height="500px"/>
-
   <img src="demo/e2e_mask_rcnn_R-50-C4/train_from_scratch_epoch1_bs4/img3.jpg" height="500px"/>
-
   <img src="demo/e2e_mask_rcnn_R-50-C4/train_from_scratch_epoch1_bs4/img4.jpg" height="500px"/>
