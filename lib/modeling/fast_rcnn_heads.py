@@ -36,7 +36,8 @@ class fast_rcnn_outputs(nn.Module):
         return detectron_weight_mapping, orphan_in_detectron
 
     def forward(self, x):
-        x = x.squeeze(3).squeeze(2)
+        if x.dim() == 4:
+            x = x.squeeze(3).squeeze(2)
         cls_score = self.cls_score(x)
         if not self.training:
             cls_score = F.softmax(cls_score, dim=1)
@@ -57,3 +58,53 @@ def fast_rcnn_losses(cls_score, bbox_pred, label_int32, bbox_targets,
     loss_bbox = net_utils.smooth_l1_loss(
         bbox_pred, bbox_targets, bbox_inside_weights, bbox_outside_weights)
     return loss_cls, loss_bbox
+
+
+# ---------------------------------------------------------------------------- #
+# Box heads
+# ---------------------------------------------------------------------------- #
+
+class roi_2mlp_head(nn.Module):
+    """Add a ReLU MLP with two hidden layers."""
+    def __init__(self, dim_in, roi_xform_func, spatial_scale):
+        super().__init__()
+        self.dim_in = dim_in
+        self.roi_xform = roi_xform_func
+        self.spatial_scale = spatial_scale
+        self.dim_out = hidden_dim = cfg.FAST_RCNN.MLP_HEAD_DIM
+
+        roi_size = cfg.FAST_RCNN.ROI_XFORM_RESOLUTION
+        self.fc1 = nn.Linear(dim_in * roi_size**2, hidden_dim)
+        self.fc2 = nn.Linear(hidden_dim, hidden_dim)
+
+        self._init_weights()
+
+    def _init_weights(self):
+        init.xavier_uniform(self.fc1.weight)
+        init.constant(self.fc1.bias, 0)
+        init.xavier_uniform(self.fc2.weight)
+        init.constant(self.fc2.bias, 0)
+
+    def detectron_weight_mapping(self):
+        detectron_weight_mapping = {
+            'fc1.weight': 'fc6_w',
+            'fc1.bias': 'fc6_b',
+            'fc2.weight': 'fc7_w',
+            'fc2.bias': 'fc7_b'
+        }
+        return detectron_weight_mapping, []
+
+    def forward(self, x, rpn_ret):
+        x = self.roi_xform(
+            x, rpn_ret,
+            blob_rois='rois',
+            method=cfg.FAST_RCNN.ROI_XFORM_METHOD,
+            resolution=cfg.FAST_RCNN.ROI_XFORM_RESOLUTION,
+            spatial_scale=self.spatial_scale,
+            sampling_ratio=cfg.FAST_RCNN.ROI_XFORM_SAMPLING_RATIO
+        )
+        batch_size = x.size(0)
+        x = F.relu(self.fc1(x.view(batch_size, -1)), inplace=True)
+        x = F.relu(self.fc2(x), inplace=True)
+
+        return x

@@ -1,3 +1,5 @@
+import numpy as np
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -15,6 +17,8 @@ class keypoint_outputs(nn.Module):
     """Mask R-CNN keypoint specific outputs: keypoint heatmaps."""
     def __init__(self, dim_in):
         super().__init__()
+        self.upsample_heatmap = (cfg.KRCNN.UP_SCALE > 1)
+
         if cfg.KRCNN.USE_DECONV:
             # Apply ConvTranspose to the feature representation; results in 2x # upsampling
             self.deconv = nn.ConvTranspose2d(
@@ -31,7 +35,7 @@ class keypoint_outputs(nn.Module):
             # Use Conv to predict heatmaps; does no upsampling
             self.classify = nn.Conv2d(dim_in, cfg.KRCNN.NUM_KEYPOINTS, 1, 1, padding=0)
 
-        if cfg.KRCNN.UP_SCALE > 1:
+        if self.upsample_heatmap:
             #TODO Detectron use conv with bilinear-interpolation-initialized weight
             self.upsample = nn.UpsamplingBilinear2d(scale_factor=cfg.KRCNN.UP_SCALE)
 
@@ -58,7 +62,7 @@ class keypoint_outputs(nn.Module):
                 'deconv.bias': 'kps_deconv_b'
             })
 
-        if cfg.KRCNN.UP_SCALE > 1:
+        if self.upsample_heatmap:
             blob_name = 'kps_score_lowres'
         else:
             blob_name = 'kps_score'
@@ -67,18 +71,13 @@ class keypoint_outputs(nn.Module):
             'classify.bias': blob_name + '_b'
         })
 
-        # if cfg.KRCNN.UP_SCALE > 1: TODO
-        #     detectron_weight_mapping.update({
-        #         'upsample.weight': 'kps_score_w',
-        #         'upsample.bias': 'kps_score_b'
-        #     })
         return detectron_weight_mapping, []
 
     def forward(self, x):
         if cfg.KRCNN.USE_DECONV:
             x = self.deconv(x)
         x = self.classify(x)
-        if cfg.KRCNN.UP_SCALE > 1:
+        if self.upsample_heatmap:
             x = self.upsample(x)
         return x
 
@@ -88,8 +87,8 @@ def keypoint_losses(kps_pred, keypoint_locations_int32, keypoint_weights,
     """Mask R-CNN keypoint specific losses."""
     device_id = kps_pred.get_device()
     kps_target = Variable(torch.from_numpy(
-        keypoint_locations_int32.astype('int64'))).cuda(device_id)
-    keypoint_weights = Variable(torch.from_numpy(keypoint_weights)).cuda(device_id)
+        keypoint_locations_int32.astype('int64').squeeze())).cuda(device_id)
+    keypoint_weights = Variable(torch.from_numpy(keypoint_weights.squeeze())).cuda(device_id)
     # Softmax across **space** (woahh....space!)
     # Note: this is not what is commonly called "spatial softmax"
     # (i.e., softmax applied along the channel dimension at each spatial
@@ -97,7 +96,7 @@ def keypoint_losses(kps_pred, keypoint_locations_int32, keypoint_weights,
     # each spatial location is a "class").
     losses = F.cross_entropy(
         kps_pred.view(-1, cfg.KRCNN.HEATMAP_SIZE**2), kps_target, reduce=False)
-    loss = cfg.KRCNN.LOSS_WEIGHT * torch.mean(losses * keypoint_weights)
+    loss = cfg.KRCNN.LOSS_WEIGHT * torch.sum(losses * keypoint_weights) / torch.sum(keypoint_weights)
 
     if not cfg.KRCNN.NORMALIZE_BY_VISIBLE_KEYPOINTS:
         # Discussion: the softmax loss above will average the loss by the sum of
@@ -160,9 +159,10 @@ class roi_pose_head_v1convX(nn.Module):
 
         return detectron_weight_mapping, orphan_in_detectron
 
-    def forward(self, x, keypoint_rois):
+    def forward(self, x, rpn_ret):
         x = self.roi_xform(
-            x, keypoint_rois,
+            x, rpn_ret,
+            blob_rois='keypoint_rois',
             method=cfg.KRCNN.ROI_XFORM_METHOD,
             resolution=cfg.KRCNN.ROI_XFORM_RESOLUTION,
             spatial_scale=self.spatial_scale,

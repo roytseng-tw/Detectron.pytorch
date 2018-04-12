@@ -105,9 +105,11 @@ class DataParallel(Module):
                 d_gpu.update(d_cpu)
 
         if len(self.device_ids) == 1:
-            return self.module(*inputs[0], **kwargs[0])
-        replicas = self.replicate(self.module, self.device_ids[:len(inputs)])
-        outputs = self.parallel_apply(replicas, inputs, kwargs)
+            outputs = [self.module(*inputs[0], **kwargs[0])]
+        else:
+            replicas = self.replicate(self.module, self.device_ids[:len(inputs)])
+            outputs = self.parallel_apply(replicas, inputs, kwargs)
+
         if self.batch_outputs:
             return self.gather(outputs, self.output_device)
         else:

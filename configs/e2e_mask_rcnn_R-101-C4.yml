@@ -1,9 +1,10 @@
 MODEL:
   TYPE: generalized_rcnn
-  CONV_BODY: resnet.ResNet101_Conv4_Body
+  CONV_BODY: ResNet.ResNet101_conv4_body
   FASTER_RCNN: True
   MASK_ON: True
-  SHARE_RES5: True
+RESNETS:
+  IMAGENET_PRETRAINED_WEIGHTS: 'data/pretrained_model/resnet101_caffe.pth'
 NUM_GPUS: 8
 SOLVER:
   WEIGHT_DECAY: 0.0001
@@ -16,7 +17,7 @@ SOLVER:
 RPN:
   SIZES: (32, 64, 128, 256, 512)
 FAST_RCNN:
-  ROI_BOX_HEAD: resnet.ResNet_Roi_Conv5_Head
+  ROI_BOX_HEAD: ResNet.ResNet_roi_conv5_head
   ROI_XFORM_METHOD: RoIAlign
 MRCNN:
   ROI_MASK_HEAD: mask_rcnn_heads.mask_rcnn_fcn_head_v0upshare

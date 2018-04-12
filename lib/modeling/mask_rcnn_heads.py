@@ -8,7 +8,7 @@ import torch.nn.init as init
 from torch.autograd import Variable
 
 from core.config import cfg
-from modeling import resnet
+from modeling import ResNet
 
 
 # ---------------------------------------------------------------------------- #
@@ -108,6 +108,7 @@ class mask_rcnn_fcn_head_v0upshare(nn.Module):
         self.spatial_scale = spatial_scale
         self.dim_out = cfg.MRCNN.DIM_REDUCED
         self.SHARE_RES5 = True
+        assert cfg.MODEL.SHARE_RES5
 
         self.res5 = None  # will be assigned later
         dim_conv5 = 2048
@@ -128,7 +129,7 @@ class mask_rcnn_fcn_head_v0upshare(nn.Module):
 
     def detectron_weight_mapping(self):
         detectron_weight_mapping, orphan_in_detectron = \
-          resnet.residual_stage_detectron_mapping(self.res5, 'res5', 3, 5)
+          ResNet.residual_stage_detectron_mapping(self.res5, 'res5', 3, 5)
         # Assign None for res5 modules, indicating not care
         for k in detectron_weight_mapping:
             detectron_weight_mapping[k] = None
@@ -139,7 +140,7 @@ class mask_rcnn_fcn_head_v0upshare(nn.Module):
         })
         return detectron_weight_mapping, orphan_in_detectron
 
-    def forward(self, x, roi_has_mask_int32=None, mask_rois=None):
+    def forward(self, x, rpn_ret, roi_has_mask_int32=None):
         if self.training:
             # On training, we share the res5 computation with bbox head, so it's necessary to
             # sample 'useful' batches from the input x (res5_2_sum). 'Useful' means that the
@@ -152,7 +153,8 @@ class mask_rcnn_fcn_head_v0upshare(nn.Module):
             # On testing, the computation is not shared with bbox head. This time input `x`
             # is the output features from the backbone network
             x = self.roi_xform(
-                x, mask_rois,
+                x, rpn_ret,
+                blob_rois='mask_rois',
                 method=cfg.MRCNN.ROI_XFORM_METHOD,
                 resolution=cfg.MRCNN.ROI_XFORM_RESOLUTION,
                 spatial_scale=self.spatial_scale,
@@ -187,18 +189,19 @@ class mask_rcnn_fcn_head_v0up(nn.Module):
 
     def detectron_weight_mapping(self):
         detectron_weight_mapping, orphan_in_detectron = \
-          resnet.residual_stage_detectron_mapping(self.res5, 'res5', 3, 5)
+          ResNet.residual_stage_detectron_mapping(self.res5, 'res5', 3, 5)
         detectron_weight_mapping.update({
             'upconv5.weight': 'conv5_mask_w',
             'upconv5.bias': 'conv5_mask_b'
         })
         return detectron_weight_mapping, orphan_in_detectron
 
-    def forward(self, x, mask_rois):
+    def forward(self, x, rpn_ret):
         x = self.roi_xform(
-            x, mask_rois,
+            x, rpn_ret,
+            blob_rois='mask_rois',
             method=cfg.MRCNN.ROI_XFORM_METHOD,
-            resolution=cfg.MRCNN.ROI_XFOM_RESOLUTION,
+            resolution=cfg.MRCNN.ROI_XFORM_RESOLUTION,
             spatial_scale=self.spatial_scale,
             sampling_ratio=cfg.MRCNN.ROI_XFORM_SAMPLING_RATIO
         )
@@ -213,6 +216,5 @@ def ResNet_roi_conv5_head_for_masks(dim_in):
     """ResNet "conv5" / "stage5" head for predicting masks."""
     dilation = cfg.MRCNN.DILATION
     stride_init = cfg.MRCNN.ROI_XFORM_RESOLUTION // 7  # by default: 2
-    module, dim_out = resnet._make_layer(resnet.Bottleneck, dim_in, 512, 3,
-                                         stride_init, dilation)
+    module, dim_out = ResNet.add_stage(dim_in, 512, 3, stride_init, dilation)
     return module, dim_out

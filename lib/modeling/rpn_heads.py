@@ -6,10 +6,36 @@ from core.config import cfg
 from modeling.generate_anchors import generate_anchors
 from modeling.generate_proposals import GenerateProposalsOp
 from modeling.generate_proposal_labels import GenerateProposalLabelsOp
+import modeling.FPN as FPN
 import utils.net as net_utils
 
 
-class Single_Scale_RPN_Outputs(nn.Module):
+# ---------------------------------------------------------------------------- #
+# RPN and Faster R-CNN outputs and losses
+# ---------------------------------------------------------------------------- #
+
+def generic_rpn_outputs(dim_in, spatial_scale_in):
+    """Add RPN outputs (objectness classification and bounding box regression)
+    to an RPN model. Abstracts away the use of FPN.
+    """
+    if cfg.FPN.FPN_ON:
+        # Delegate to the FPN module
+        return FPN.fpn_rpn_outputs(dim_in, spatial_scale_in)
+    else:
+        # Not using FPN, add RPN to a single scale
+        return single_scale_rpn_outputs(dim_in, spatial_scale_in)
+
+
+def generic_rpn_losses(*inputs, **kwargs):
+    """Add RPN losses. Abstracts away the use of FPN."""
+    if cfg.FPN.FPN_ON:
+        return FPN.fpn_rpn_losses(*inputs, **kwargs)
+    else:
+        return single_scale_rpn_losses(*inputs, **kwargs)
+
+
+class single_scale_rpn_outputs(nn.Module):
+    """Add RPN outputs to a single scale model (i.e., no FPN)."""
     def __init__(self, dim_in, spatial_scale):
         super().__init__()
         self.dim_in = dim_in
@@ -88,7 +114,7 @@ class Single_Scale_RPN_Outputs(nn.Module):
                 rpn_cls_prob, rpn_bbox_pred, im_info)
 
             return_dict['rpn_rois'] = rpn_rois
-            return_dict['rpn_rois_prob'] = rpn_rois_prob
+            return_dict['rpn_roi_probs'] = rpn_rois_prob
 
         if cfg.MODEL.FASTER_RCNN :
             if self.training:
@@ -106,6 +132,7 @@ def single_scale_rpn_losses(
         rpn_cls_logits, rpn_bbox_pred,
         rpn_labels_int32_wide, rpn_bbox_targets_wide,
         rpn_bbox_inside_weights_wide, rpn_bbox_outside_weights_wide):
+    """Add losses for a single scale RPN model (i.e., no FPN)."""
     h, w = rpn_cls_logits.shape[2:]
     rpn_labels_int32 = rpn_labels_int32_wide[:, :, :h, :w]   # -1 means ignore
     h, w = rpn_bbox_pred.shape[2:]

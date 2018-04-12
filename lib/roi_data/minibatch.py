@@ -11,8 +11,16 @@ def get_minibatch_blob_names(is_training=True):
     """
     # data blob: holds a batch of N images, each with 3 channels
     blob_names = ['data']
-    # RPN-only or end-to-end Faster R-CNN
-    blob_names += roi_data.rpn.get_rpn_blob_names(is_training=is_training)
+    if cfg.RPN.RPN_ON:
+        # RPN-only or end-to-end Faster R-CNN
+        blob_names += roi_data.rpn.get_rpn_blob_names(is_training=is_training)
+    elif cfg.RETINANET.RETINANET_ON:
+        raise NotImplementedError
+    else:
+        # Fast R-CNN like models trained on precomputed proposals
+        blob_names += roi_data.fast_rcnn.get_fast_rcnn_blob_names(
+            is_training=is_training
+        )
     return blob_names
 
 
@@ -25,10 +33,15 @@ def get_minibatch(roidb):
     # Get the input image blob
     im_blob, im_scales = _get_image_blob(roidb)
     blobs['data'] = im_blob
-
-    roi_data.rpn.add_rpn_blobs(blobs, im_scales, roidb)
-
-    return blobs
+    if cfg.RPN.RPN_ON:
+        # RPN-only or end-to-end Faster/Mask R-CNN
+        valid = roi_data.rpn.add_rpn_blobs(blobs, im_scales, roidb)
+    elif cfg.RETINANET.RETINANET_ON:
+        raise NotImplementedError
+    else:
+        # Fast R-CNN like models trained on precomputed proposals
+        valid = roi_data.fast_rcnn.add_fast_rcnn_blobs(blobs, im_scales, roidb)
+    return blobs, valid
 
 
 def _get_image_blob(roidb):
@@ -45,7 +58,7 @@ def _get_image_blob(roidb):
         im = cv2.imread(roidb[i]['image'])
         assert im is not None, \
             'Failed to read image \'{}\''.format(roidb[i]['image'])
-        # If Not using opencv to read in images, uncomment following lines
+        # If NOT using opencv to read in images, uncomment following lines
         # if len(im.shape) == 2:
         #     im = im[:, :, np.newaxis]
         #     im = np.concatenate((im, im, im), axis=2)

@@ -99,7 +99,7 @@ def main():
     cfg.RESNETS.IMAGENET_PRETRAINED = False  # Don't need to load imagenet pretrained weights
     assert_and_infer_cfg()
 
-    maskRCNN = Generalized_RCNN(train=False)
+    maskRCNN = Generalized_RCNN()
 
     if args.load_ckpt:
         load_name = args.load_ckpt
