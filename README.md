@@ -231,9 +231,4 @@ TBA
   <img src="demo/e2e_mask_rcnn_R-50-C4/train_from_scratch_epoch1_bs4/img2.jpg" height="500px"/>
   <img src="demo/e2e_mask_rcnn_R-50-C4/train_from_scratch_epoch1_bs4/img3.jpg" height="500px"/>
   <img src="demo/e2e_mask_rcnn_R-50-C4/train_from_scratch_epoch1_bs4/img4.jpg" height="500px"/>
-
-  <img src="demo/e2e_mask_rcnn_R-50-C4/train_from_scratch_epoch1_bs4/img2.jpg" height="500px"/>
-
-  <img src="demo/e2e_mask_rcnn_R-50-C4/train_from_scratch_epoch1_bs4/img3.jpg" height="500px"/>
-
-  <img src="demo/e2e_mask_rcnn_R-50-C4/train_from_scratch_epoch1_bs4/img4.jpg" height="500px"/>
+ 
