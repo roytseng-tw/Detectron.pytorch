@@ -30,6 +30,7 @@ import roi_data.keypoint_rcnn
 import roi_data.mask_rcnn
 import utils.boxes as box_utils
 import utils.blob as blob_utils
+import utils.fpn as fpn_utils
 
 
 def get_fast_rcnn_blob_names(is_training=True):
@@ -112,6 +113,9 @@ def add_fast_rcnn_blobs(blobs, im_scales, roidb):
     for k, v in blobs.items():
         if isinstance(v, list) and len(v) > 0:
             blobs[k] = np.concatenate(v)
+    # Add FPN multilevel training RoIs, if configured
+    if cfg.FPN.FPN_ON and cfg.FPN.MULTILEVEL_ROIS:
+        _add_multilevel_rois(blobs)
 
     # Perform any final work and validity checks after the collating blobs for
     # all minibatch images
@@ -239,3 +243,33 @@ def _expand_bbox_targets(bbox_target_data):
         bbox_targets[ind, start:end] = bbox_target_data[ind, 1:]
         bbox_inside_weights[ind, start:end] = (1.0, 1.0, 1.0, 1.0)
     return bbox_targets, bbox_inside_weights
+
+
+def _add_multilevel_rois(blobs):
+    """By default training RoIs are added for a single feature map level only.
+    When using FPN, the RoIs must be distributed over different FPN levels
+    according the level assignment heuristic (see: modeling.FPN.
+    map_rois_to_fpn_levels).
+    """
+    lvl_min = cfg.FPN.ROI_MIN_LEVEL
+    lvl_max = cfg.FPN.ROI_MAX_LEVEL
+
+    def _distribute_rois_over_fpn_levels(rois_blob_name):
+        """Distribute rois over the different FPN levels."""
+        # Get target level for each roi
+        # Recall blob rois are in (batch_idx, x1, y1, x2, y2) format, hence take
+        # the box coordinates from columns 1:5
+        target_lvls = fpn_utils.map_rois_to_fpn_levels(
+            blobs[rois_blob_name][:, 1:5], lvl_min, lvl_max
+        )
+        # Add per FPN level roi blobs named like: <rois_blob_name>_fpn<lvl>
+        fpn_utils.add_multilevel_roi_blobs(
+            blobs, rois_blob_name, blobs[rois_blob_name], target_lvls, lvl_min,
+            lvl_max
+        )
+
+    _distribute_rois_over_fpn_levels('rois')
+    if cfg.MODEL.MASK_ON:
+        _distribute_rois_over_fpn_levels('mask_rois')
+    if cfg.MODEL.KEYPOINTS_ON:
+        _distribute_rois_over_fpn_levels('keypoint_rois')

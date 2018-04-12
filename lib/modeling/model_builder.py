@@ -43,16 +43,30 @@ def get_func(func_name):
 
 
 class Generalized_RCNN(nn.Module):
-    def __init__(self, train=False):
+    def __init__(self):
         super().__init__()
-        self.training = train
 
         # Backbone for feature extraction
         self.Conv_Body = get_func(cfg.MODEL.CONV_BODY)()
 
         # Region Proposal Network
-        self.RPN = rpn_heads.Single_Scale_RPN_Outputs(
-            self.Conv_Body.dim_out, self.Conv_Body.spatial_scale)
+        if cfg.RPN.RPN_ON:
+            self.RPN = rpn_heads.generic_rpn_outputs(
+                self.Conv_Body.dim_out, self.Conv_Body.spatial_scale)
+
+        if cfg.FPN.FPN_ON:
+            # Only supports case when RPN and ROI min levels are the same
+            assert cfg.FPN.RPN_MIN_LEVEL == cfg.FPN.ROI_MIN_LEVEL
+            # RPN max level can be >= to ROI max level
+            assert cfg.FPN.RPN_MAX_LEVEL >= cfg.FPN.ROI_MAX_LEVEL
+            # FPN RPN max level might be > FPN ROI max level in which case we
+            # need to discard some leading conv blobs (blobs are ordered from
+            # max/coarsest level to min/finest level)
+            self.num_roi_levels = cfg.FPN.ROI_MAX_LEVEL - cfg.FPN.ROI_MIN_LEVEL + 1
+
+            # Retain only the spatial scales that will be used for RoI heads. `Conv_Body.spatial_scale`
+            # may include extra scales that are used for RPN proposals, but not for RoI heads.
+            self.Conv_Body.spatial_scale = self.Conv_Body.spatial_scale[-self.num_roi_levels:]
 
         # BBOX Branch
         if not cfg.MODEL.RPN_ONLY:
@@ -67,12 +81,12 @@ class Generalized_RCNN(nn.Module):
                 self.RPN.dim_out, self.roi_feature_transform, self.Conv_Body.spatial_scale)
             if getattr(self.Mask_Head, 'SHARE_RES5', False):
                 self.Mask_Head.share_res5_module(self.Box_Head.res5)
-            self.Mask_Outs = mask_rcnn_heads.mask_rcnn_outputs(self.Mask_Head.dim_out)  #TODO: reference config values
+            self.Mask_Outs = mask_rcnn_heads.mask_rcnn_outputs(self.Mask_Head.dim_out)
 
         # Keypoints Branch
         if cfg.MODEL.KEYPOINTS_ON:
             self.Keypoint_Head = get_func(cfg.KRCNN.ROI_KEYPOINTS_HEAD)(
-                self.RPN.dim_out)
+                self.RPN.dim_out, self.roi_feature_transform, self.Conv_Body.spatial_scale)
             if getattr(self.Keypoint_Head, 'SHARE_RES5', False):
                 self.Keypoint_Head.share_res5_module(self.Box_Head.res5)
             self.Keypoint_Outs = keypoint_rcnn_heads.keypoint_outputs(self.Keypoint_Head.dim_out)
@@ -80,8 +94,8 @@ class Generalized_RCNN(nn.Module):
         self._init_modules()
 
     def _init_modules(self):
-        if cfg.RESNETS.IMAGENET_PRETRAINED:
-            resnet_utils.load_pretrained_imagenet_weights(self.Conv_Body.num_layers, self)
+        if cfg.MODEL.LOAD_IMAGENET_PRETRAINED_WEIGHTS:
+            resnet_utils.load_pretrained_imagenet_weights(self)
             # Check if shared weights are equaled
             if cfg.MODEL.MASK_ON and getattr(self.Mask_Head, 'SHARE_RES5', False):
                 assert self.Mask_Head.res5.state_dict() == self.Box_Head.res5.state_dict()
@@ -92,12 +106,7 @@ class Generalized_RCNN(nn.Module):
             for p in self.Conv_Body.parameters():
                 p.requires_grad = False
 
-        # Set trainning for all submodules. Must call after all submodules are added.
-        self.train(self.training)
-
-    def forward(self, data, im_info, roidb=None,
-                rpn_labels_int32_wide=None, rpn_bbox_targets_wide=None,
-                rpn_bbox_inside_weights_wide=None, rpn_bbox_outside_weights_wide=None):
+    def forward(self, data, im_info, roidb=None, **rpn_kwargs):
         im_data = data
         if self.training:
             roidb = list(map(lambda x: blob_utils.deserialize(x)[0], roidb))
@@ -117,13 +126,16 @@ class Generalized_RCNN(nn.Module):
         if self.training:
             return_dict['rois_label'] = rpn_ret['labels_int32']
 
-        # rois_feat = self.roi_feature_transform(rois, blob_conv)
+        if cfg.FPN.FPN_ON:
+            # Retain only the blobs that will be used for RoI heads. `blob_conv` may include
+            # extra blobs that are used for RPN proposals, but not for RoI heads.
+            blob_conv = blob_conv[-self.num_roi_levels:]
 
         if not cfg.MODEL.RPN_ONLY:
             if cfg.MODEL.SHARE_RES5 and self.training:
-                box_feat, res5_feat = self.Box_Head(blob_conv, rois)
+                box_feat, res5_feat = self.Box_Head(blob_conv, rpn_ret)
             else:
-                box_feat = self.Box_Head(blob_conv, rois)
+                box_feat = self.Box_Head(blob_conv, rpn_ret)
             cls_score, bbox_pred = self.Box_Outs(box_feat)
             return_dict['cls_score'] = cls_score
             return_dict['bbox_pred'] = bbox_pred
@@ -132,10 +144,11 @@ class Generalized_RCNN(nn.Module):
 
         if self.training:
             # rpn loss
-            loss_rpn_cls, loss_rpn_bbox = rpn_heads.single_scale_rpn_losses(
-                rpn_ret['rpn_cls_logits'], rpn_ret['rpn_bbox_pred'],
-                rpn_labels_int32_wide, rpn_bbox_targets_wide,
-                rpn_bbox_inside_weights_wide, rpn_bbox_outside_weights_wide)
+            rpn_kwargs.update(dict(
+                (k, rpn_ret[k]) for k in rpn_ret.keys()
+                if (k.startswith('rpn_cls_logits') or k.startswith('rpn_bbox_pred'))
+            ))
+            loss_rpn_cls, loss_rpn_bbox = rpn_heads.generic_rpn_losses(**rpn_kwargs)
             return_dict['loss_rpn_cls'] = loss_rpn_cls
             return_dict['loss_rpn_bbox'] = loss_rpn_bbox
 
@@ -148,9 +161,10 @@ class Generalized_RCNN(nn.Module):
 
             if cfg.MODEL.MASK_ON:
                 if getattr(self.Mask_Head, 'SHARE_RES5', False):
-                    mask_feat = self.Mask_Head(res5_feat, roi_has_mask_int32=rpn_ret['roi_has_mask_int32'])
+                    mask_feat = self.Mask_Head(res5_feat, rpn_ret,
+                                               roi_has_mask_int32=rpn_ret['roi_has_mask_int32'])
                 else:
-                    mask_feat = self.Mask_Head(blob_conv, mask_rois=rpn_ret['mask_rois'])
+                    mask_feat = self.Mask_Head(blob_conv, rpn_ret)
                 mask_pred = self.Mask_Outs(mask_feat)
                 # return_dict['mask_pred'] = mask_pred
                 # mask loss
@@ -161,36 +175,84 @@ class Generalized_RCNN(nn.Module):
                 if getattr(self.Keypoint_Head, 'SHARE_RES5', False):
                     # No corresponding keypoint head implemented yet (Neither in Detectron)
                     # Also, rpn need to generate the label 'roi_has_keypoints_int32'
-                    kps_feat = self.Keypoint_Head(
-                        res5_feat, roi_has_keypoints_int32=rpn_ret['roi_has_keypoint_int32'])
+                    kps_feat = self.Keypoint_Head(res5_feat, rpn_ret,
+                                                  roi_has_keypoints_int32=rpn_ret['roi_has_keypoint_int32'])
                 else:
-                    kps_feat = self.Keypoint_Head(blob_conv, keypoint_rois=rpn_ret['keypoint_rois'])
+                    kps_feat = self.Keypoint_Head(blob_conv, rpn_ret)
                 kps_pred = self.Keypoint_Outs(kps_feat)
                 # return_dict['keypoints_pred'] = kps_pred
                 # keypoints loss
                 if cfg.KRCNN.NORMALIZE_BY_VISIBLE_KEYPOINTS:
-                    keypoint_rcnn_heads.keypoint_losses(
+                    loss_keypoints = keypoint_rcnn_heads.keypoint_losses(
                         kps_pred, rpn_ret['keypoint_locations_int32'], rpn_ret['keypoint_weights'])
                 else:
-                    keypoint_rcnn_heads.keypoint_losses(
+                    loss_keypoints = keypoint_rcnn_heads.keypoint_losses(
                         kps_pred, rpn_ret['keypoint_locations_int32'], rpn_ret['keypoint_weights'],
                         rpn_ret['keypoint_loss_normalizer'])
+                return_dict['loss_rcnn_keypoints'] = loss_keypoints
 
         return return_dict
 
-    def roi_feature_transform(self, blobs_in, rois, method='RoIPoolF',
+    def roi_feature_transform(self, blobs_in, rpn_ret, blob_rois='rois', method='RoIPoolF',
                               resolution=7, spatial_scale=1. / 16., sampling_ratio=0):
-        # rois blob: holds R regions of interest, each is a 5-tuple
-        # (batch_idx, x1, y1, x2, y2) specifying an image batch index and a
-        # rectangle (x1, y1, x2, y2)
+        """Add the specified RoI pooling method. The sampling_ratio argument
+        is supported for some, but not all, RoI transform methods.
+
+        RoIFeatureTransform abstracts away:
+          - Use of FPN or not
+          - Specifics of the transform method
+        """
         assert method in {'RoIPoolF', 'RoICrop', 'RoIAlign'}, \
             'Unknown pooling method: {}'.format(method)
+        
 
         if isinstance(blobs_in, list):
-            # TODO FPN case: add RoIFeatureTransform to each FPN level
-            raise NotImplementedError()
+            # FPN case: add RoIFeatureTransform to each FPN level
+            device_id = blobs_in[0].get_device()
+            k_max = cfg.FPN.ROI_MAX_LEVEL  # coarsest level of pyramid
+            k_min = cfg.FPN.ROI_MIN_LEVEL  # finest level of pyramid
+            assert len(blobs_in) == k_max - k_min + 1
+            bl_out_list = []
+            for lvl in range(k_min, k_max + 1):
+                bl_in = blobs_in[k_max - lvl]  # blobs_in is in reversed order
+                sc = spatial_scale[k_max - lvl]  # in reversed order
+                bl_rois = blob_rois + '_fpn' + str(lvl)
+                if len(rpn_ret[bl_rois]):
+                    rois = Variable(torch.from_numpy(rpn_ret[bl_rois])).cuda(device_id)
+                    if method == 'RoIPoolF':
+                        # Warning!: Not check if implementation matches Detectron
+                        xform_out = RoIPoolFunction(resolution, resolution, sc)(bl_in, rois)
+                    elif method == 'RoICrop':
+                        # Warning!: Not check if implementation matches Detectron
+                        grid_xy = net_utils.affine_grid_gen(
+                            rois, bl_in.size()[2:], self.grid_size)
+                        grid_yx = torch.stack(
+                            [grid_xy.data[:, :, :, 1], grid_xy.data[:, :, :, 0]], 3).contiguous()
+                        xform_out = RoICropFunction()(bl_in, Variable(grid_yx).detach())
+                        if cfg.CROP_RESIZE_WITH_MAX_POOL:
+                            xform_out = F.max_pool2d(xform_out, 2, 2)
+                    elif method == 'RoIAlign':
+                        xform_out = RoIAlignFunction(
+                            resolution, resolution, sc, sampling_ratio)(bl_in, rois)
+                    bl_out_list.append(xform_out)
+
+            # The pooled features from all levels are concatenated along the
+            # batch dimension into a single 4D tensor.
+            xform_shuffled = torch.cat(bl_out_list, dim=0)
+
+            # Unshuffle to match rois from dataloader
+            device_id = xform_shuffled.get_device()
+            restore_bl = rpn_ret[blob_rois + '_idx_restore_int32']
+            restore_bl = Variable(
+                torch.from_numpy(restore_bl.astype('int64', copy=False))).cuda(device_id)
+            xform_out = xform_shuffled[restore_bl]
         else:
             # Single feature level
+            # rois: holds R regions of interest, each is a 5-tuple
+            # (batch_idx, x1, y1, x2, y2) specifying an image batch index and a
+            # rectangle (x1, y1, x2, y2)
+            device_id = blobs_in.get_device()
+            rois = Variable(torch.from_numpy(rpn_ret[blob_rois])).cuda(device_id)
             if method == 'RoIPoolF':
                 xform_out = RoIPoolFunction(resolution, resolution, spatial_scale)(blobs_in, rois)
             elif method == 'RoICrop':

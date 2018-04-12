@@ -140,7 +140,7 @@ class mask_rcnn_fcn_head_v0upshare(nn.Module):
         })
         return detectron_weight_mapping, orphan_in_detectron
 
-    def forward(self, x, roi_has_mask_int32=None, mask_rois=None):
+    def forward(self, x, rpn_ret, roi_has_mask_int32=None):
         if self.training:
             # On training, we share the res5 computation with bbox head, so it's necessary to
             # sample 'useful' batches from the input x (res5_2_sum). 'Useful' means that the
@@ -153,7 +153,8 @@ class mask_rcnn_fcn_head_v0upshare(nn.Module):
             # On testing, the computation is not shared with bbox head. This time input `x`
             # is the output features from the backbone network
             x = self.roi_xform(
-                x, mask_rois,
+                x, rpn_ret,
+                blob_rois='mask_rois',
                 method=cfg.MRCNN.ROI_XFORM_METHOD,
                 resolution=cfg.MRCNN.ROI_XFORM_RESOLUTION,
                 spatial_scale=self.spatial_scale,
@@ -195,11 +196,12 @@ class mask_rcnn_fcn_head_v0up(nn.Module):
         })
         return detectron_weight_mapping, orphan_in_detectron
 
-    def forward(self, x, mask_rois):
+    def forward(self, x, rpn_ret):
         x = self.roi_xform(
-            x, mask_rois,
+            x, rpn_ret,
+            blob_rois='mask_rois',
             method=cfg.MRCNN.ROI_XFORM_METHOD,
-            resolution=cfg.MRCNN.ROI_XFOM_RESOLUTION,
+            resolution=cfg.MRCNN.ROI_XFORM_RESOLUTION,
             spatial_scale=self.spatial_scale,
             sampling_ratio=cfg.MRCNN.ROI_XFORM_SAMPLING_RATIO
         )

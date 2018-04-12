@@ -1,7 +1,6 @@
 MODEL:
   TYPE: generalized_rcnn
-  CONV_BODY: FPN.add_fpn_ResNet50_conv5_body
-  NUM_CLASSES: 2
+  CONV_BODY: FPN.fpn_ResNet50_conv5_body
   FASTER_RCNN: True
   KEYPOINTS_ON: True
 RESNETS:
@@ -19,12 +18,12 @@ FPN:
   MULTILEVEL_ROIS: True
   MULTILEVEL_RPN: True
 FAST_RCNN:
-  ROI_BOX_HEAD: head_builder.add_roi_2mlp_head
+  ROI_BOX_HEAD: fast_rcnn_heads.roi_2mlp_head
   ROI_XFORM_METHOD: RoIAlign
   ROI_XFORM_RESOLUTION: 7
   ROI_XFORM_SAMPLING_RATIO: 2
 KRCNN:
-  ROI_KEYPOINTS_HEAD: keypoint_rcnn_heads.add_roi_pose_head_v1convX
+  ROI_KEYPOINTS_HEAD: keypoint_rcnn_heads.roi_pose_head_v1convX
   NUM_STACKED_CONVS: 8
   NUM_KEYPOINTS: 17
   USE_DECONV_OUTPUT: True

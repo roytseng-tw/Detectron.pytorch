@@ -39,9 +39,24 @@ def get_rpn_blob_names(is_training=True):
 
 def add_rpn_blobs(blobs, im_scales, roidb):
     """Add blobs needed training RPN-only and end-to-end Faster R-CNN models."""
-    foa = data_utils.get_field_of_anchors(cfg.RPN.STRIDE, cfg.RPN.SIZES,
-                                          cfg.RPN.ASPECT_RATIOS)
-    all_anchors = foa.field_of_anchors
+    if cfg.FPN.FPN_ON and cfg.FPN.MULTILEVEL_RPN:
+        # RPN applied to many feature levels, as in the FPN paper
+        k_max = cfg.FPN.RPN_MAX_LEVEL
+        k_min = cfg.FPN.RPN_MIN_LEVEL
+        foas = []
+        for lvl in range(k_min, k_max + 1):
+            field_stride = 2.**lvl
+            anchor_sizes = (cfg.FPN.RPN_ANCHOR_START_SIZE * 2.**(lvl - k_min), )
+            anchor_aspect_ratios = cfg.FPN.RPN_ASPECT_RATIOS
+            foa = data_utils.get_field_of_anchors(
+                field_stride, anchor_sizes, anchor_aspect_ratios
+            )
+            foas.append(foa)
+        all_anchors = np.concatenate([f.field_of_anchors for f in foas])
+    else:
+        foa = data_utils.get_field_of_anchors(cfg.RPN.STRIDE, cfg.RPN.SIZES,
+                                              cfg.RPN.ASPECT_RATIOS)
+        all_anchors = foa.field_of_anchors
 
     for im_i, entry in enumerate(roidb):
         scale = im_scales[im_i]
@@ -60,12 +75,22 @@ def add_rpn_blobs(blobs, im_scales, roidb):
         im_info = np.array([[im_height, im_width, scale]], dtype=np.float32)
         blobs['im_info'].append(im_info)
 
-        # Classical RPN, applied to a single feature level
-        rpn_blobs = _get_rpn_blobs(
-            im_height, im_width, [foa], all_anchors, gt_rois
-        )
-        for k, v in rpn_blobs.items():
-            blobs[k].append(v)
+        # Add RPN targets
+        if cfg.FPN.FPN_ON and cfg.FPN.MULTILEVEL_RPN:
+            # RPN applied to many feature levels, as in the FPN paper
+            rpn_blobs = _get_rpn_blobs(
+                im_height, im_width, foas, all_anchors, gt_rois
+            )
+            for i, lvl in enumerate(range(k_min, k_max + 1)):
+                for k, v in rpn_blobs[i].items():
+                    blobs[k + '_fpn' + str(lvl)].append(v)
+        else:
+            # Classical RPN, applied to a single feature level
+            rpn_blobs = _get_rpn_blobs(
+                im_height, im_width, [foa], all_anchors, gt_rois
+            )
+            for k, v in rpn_blobs.items():
+                blobs[k].append(v)
 
     for k, v in blobs.items():
         if isinstance(v, list) and len(v) > 0:
@@ -82,6 +107,9 @@ def add_rpn_blobs(blobs, im_scales, roidb):
                 minimal_roidb[i][k] = e[k]
     # blobs['roidb'] = blob_utils.serialize(minimal_roidb)
     blobs['roidb'] = minimal_roidb
+
+    # Always return valid=True, since RPN minibatches are valid by design
+    return True
 
 
 def _get_rpn_blobs(im_height, im_width, foas, all_anchors, gt_boxes):

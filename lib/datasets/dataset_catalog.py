@@ -175,6 +175,24 @@ DATASETS = {
         ANN_FN:
             _DATA_DIR + '/coco/annotations/image_info_test-dev2015.json'
     },
+    'keypoints_coco_2017_train': {
+        IM_DIR:
+            _DATA_DIR + '/coco/images/train2017',
+        ANN_FN:
+            _DATA_DIR + '/coco/annotations/person_keypoints_train2017.json'
+    },
+    'keypoints_coco_2017_val': {
+        IM_DIR:
+            _DATA_DIR + '/coco/images/val2017',
+        ANN_FN:
+            _DATA_DIR + '/coco/annotations/person_keypoints_val2017.json'
+    },
+    'keypoints_coco_2017_test': {
+        IM_DIR:
+            _DATA_DIR + '/coco/images/test2017',
+        ANN_FN:
+            _DATA_DIR + '/coco/annotations/image_info_test2017.json'
+    },
     'voc_2007_trainval': {
         IM_DIR:
             _DATA_DIR + '/VOC2007/JPEGImages',

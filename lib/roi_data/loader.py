@@ -23,7 +23,9 @@ class RoiDataLoader(data.Dataset):
     def __getitem__(self, index_tuple):
         index, ratio, imsizes = index_tuple
         single_db = [self._roidb[index]]
-        blobs = get_minibatch(single_db)
+        blobs, valid = get_minibatch(single_db)
+        #TODO: Check if minibatch is valid ? If not, abandon it.
+        # Need to change _worker_loop in torch.utils.data.dataloader.py.
 
         # Squeeze batch dim
         for key in blobs:
@@ -49,10 +51,6 @@ class RoiDataLoader(data.Dataset):
 
         blobs['roidb'] = blob_utils.serialize(blobs['roidb'])  # CHECK: maybe we should serialize in collate_fn
 
-        # for key, v in blobs.items():
-        #     if key != 'roidb':
-        #         print(key, v.shape)
-
         return blobs
 
     def crop_data(self, blobs, ratio):
@@ -72,7 +70,7 @@ class RoiDataLoader(data.Dataset):
                     y_s = y_s_min if y_s_min == y_s_max else \
                         npr.choice(range(y_s_min, y_s_max + 1))
                 else:
-                    # CHECK: the mechnism for the case box_region > size_crop rethinking
+                    # CHECK: rethinking the mechnism for the case box_region > size_crop
                     # Now, the crop is biased on the lower part of box_region caused by
                     # // 2 for y_s_add
                     y_s_add = (box_region - size_crop) // 2
@@ -90,8 +88,8 @@ class RoiDataLoader(data.Dataset):
             blobs['roidb'][0]['boxes'] = boxes
         else:  # width >> height, crop width
             size_crop = math.ceil(data_height * ratio)
-            min_x = math.floor(np.min(boxes[:,0]))
-            max_x = math.floor(np.max(boxes[:,2]))
+            min_x = math.floor(np.min(boxes[:, 0]))
+            max_x = math.floor(np.max(boxes[:, 2]))
             box_region = max_x - min_x + 1
             if min_x == 0:
                 x_s = 0

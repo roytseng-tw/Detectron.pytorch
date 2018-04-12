@@ -124,9 +124,10 @@ class ResNet_roi_conv5_head(nn.Module):
           residual_stage_detectron_mapping(self.res5, 'res5', 3, 5)
         return mapping_to_detectron, orphan_in_detectron
 
-    def forward(self, x, rois):
+    def forward(self, x, rpn_ret):
         x = self.roi_xform(
-            x, rois,
+            x, rpn_ret,
+            blob_rois='rois',
             method=cfg.FAST_RCNN.ROI_XFORM_METHOD,
             resolution=cfg.FAST_RCNN.ROI_XFORM_RESOLUTION,
             spatial_scale=self.spatial_scale,
@@ -227,8 +228,7 @@ class bottleneck_transformation(nn.Module):
         super().__init__()
         # In original resnet, stride=2 is on 1x1.
         # In fb.torch resnet, stride=2 is on 3x3.
-        (str1x1, str3x3) = (stride, 1) if cfg.RESNETS.STRIDE_1X1 else (1,
-                                                                       stride)
+        (str1x1, str3x3) = (stride, 1) if cfg.RESNETS.STRIDE_1X1 else (1, stride)
 
         self.conv1 = nn.Conv2d(
             inplanes, planes, kernel_size=1, stride=str1x1, bias=False)

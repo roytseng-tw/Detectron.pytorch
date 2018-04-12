@@ -232,7 +232,7 @@ def main():
     assert_and_infer_cfg()
 
     ### Model ###
-    maskRCNN = Generalized_RCNN(train=True)
+    maskRCNN = Generalized_RCNN()
 
     if cfg.CUDA:
         maskRCNN.cuda()
@@ -353,10 +353,10 @@ def main():
                     loss += loss_rcnn_mask
 
                 if cfg.MODEL.KEYPOINTS_ON:
-                    loss_rcnn_kps = outputs['loss_rcnn_kps'].mean()
-                    loss += loss_rcnn_kps
+                    loss_rcnn_keypoints = outputs['loss_rcnn_kps'].mean()
+                    loss += loss_rcnn_keypoints
 
-                loss_avg += loss.data[0]
+                loss_avg += loss.data.cpu().numpy()[0]
 
                 optimizer.zero_grad()
                 loss.backward()
@@ -374,28 +374,36 @@ def main():
                         loss_rpn_bbox = loss_rpn_bbox.data[0]
                         loss_rcnn_cls = loss_rcnn_cls.data[0]
                         loss_rcnn_bbox = loss_rcnn_bbox.data[0]
-                        loss_rcnn_mask = loss_rcnn_mask.data[0]
                         fg_cnt = torch.sum(rois_label.data.ne(0))
                         bg_cnt = rois_label.data.numel() - fg_cnt
-
                         print("[%s][epoch %2d][iter %4d / %4d]"
-                              % (run_name, epoch, step, iters_per_epoch))
-                        print("\t\tloss_avg: %.4f, lr: %.2e" % (loss_avg, lr))
-                        print("\t\tfg/bg=(%d/%d), time cost/%d iters: %.2f (secs)"
-                              % (fg_cnt, bg_cnt, args.disp_interval, diff))
-                        print("\t\trpn_cls: %.4f, rpn_bbox: %.4f, rcnn_cls: %.4f, "
-                            "rcnn_bbox %.4f, rcnn_mask %.4f"
-                            % (loss_rpn_cls, loss_rpn_bbox, loss_rcnn_cls,
-                                loss_rcnn_bbox, loss_rcnn_mask))
+                            % (run_name, epoch, step, iters_per_epoch))
+                        print("\t\tloss: %.4f, lr: %.2e" % (loss_avg, lr))
+                        print("\t\tfg/bg=(%d/%d), time cost: %f" % (fg_cnt, bg_cnt, diff))
+                        print("\t\trpn_cls: %.4f, rpn_bbox: %.4f, rcnn_cls: %.4f, rcnn_bbox %.4f"
+                            % (loss_rpn_cls, loss_rpn_bbox, loss_rcnn_cls, loss_rcnn_bbox))
+
+                        print_prefix = "\t\t"
+                        if cfg.MODEL.MASK_ON:
+                            loss_rcnn_mask = loss_rcnn_mask.data[0]
+                            print("%srcnn_mask %.4f" % (print_prefix, loss_rcnn_mask))
+                            print_prefix = ", "
+                        if cfg.MODEL.KEYPOINTS_ON:
+                            loss_rcnn_keypoints = loss_rcnn_keypoints.data[0]
+                            print("%srcnn_keypoints %.4f" % (print_prefix, loss_rcnn_keypoints))
+
                         if args.use_tfboard:
                             info = {
-                                'loss_avg': loss.data[0],
+                                'loss': loss_avg,
                                 'loss_rpn_cls': loss_rpn_cls,
                                 'loss_rpn_box': loss_rpn_bbox,
                                 'loss_rcnn_cls': loss_rcnn_cls,
                                 'loss_rcnn_box': loss_rcnn_bbox,
-                                'loss_rcnn_mask': loss_rcnn_mask
                             }
+                            if cfg.MODEL.MASK_ON:
+                                info['loss_rcnn_mask'] = loss_rcnn_mask
+                            if cfg.MODEL.KEYPOINTS_ON:
+                                info['loss_rcnn_keypoints'] = loss_rcnn_keypoints
                             for tag, value in info.items():
                                 tblogger.add_scalar(tag, value, iters_per_epoch * epoch + step)
 

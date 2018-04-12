@@ -22,7 +22,10 @@ def load_pretrained_imagenet_weights(model):
     # Convert batchnorm weights
     for name, mod in model.named_modules():
         if isinstance(mod, mynn.AffineChannel2d):
-            pretrianed_name = name.split('.', 1)[1]
+            if cfg.FPN.FPN_ON:
+                pretrianed_name = name.split('.', 2)[-1]
+            else:
+                pretrianed_name = name.split('.', 1)[-1]
             bn_mean = pretrianed_state_dict[pretrianed_name + '.running_mean']
             bn_var = pretrianed_state_dict[pretrianed_name + '.running_var']
             scale = pretrianed_state_dict[pretrianed_name + '.weight']
@@ -42,7 +45,10 @@ def load_pretrained_imagenet_weights(model):
     for k, v in name_mapping.items():
         if v is not None:
             if pattern.match(v):
-                pretrianed_key = k.split('.', 1)[1]
+                if cfg.FPN.FPN_ON:
+                    pretrianed_key = k.split('.', 2)[-1]
+                else:
+                    pretrianed_key = k.split('.', 1)[-1]
                 model_state_dict[k].copy_(pretrianed_state_dict[pretrianed_key])
 
 
@@ -59,6 +65,8 @@ def convert_state_dict(src_dict):
             res_id = int(toks[0][5]) + 1
             name = '.'.join(['res%d' % res_id] + toks[1:])
             dst_dict[name] = v
+        elif k.startswith('fc'):
+            continue
         else:
             name = '.'.join(['res1'] + toks)
             dst_dict[name] = v
