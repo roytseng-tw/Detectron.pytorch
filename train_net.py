@@ -167,6 +167,8 @@ def main():
 
     if args.dataset == "coco2017":
         cfg.TRAIN.DATASETS = ('coco_2017_train',)
+    elif args.dataset == "keypoints_coco2017":
+        cfg.TRAIN.DATASETS = ('keypoints_coco_2017_train',)
     else:
         raise ValueError("Unexpected args.dataset: {}".format(args.dataset))
 
@@ -353,7 +355,7 @@ def main():
                     loss += loss_rcnn_mask
 
                 if cfg.MODEL.KEYPOINTS_ON:
-                    loss_rcnn_keypoints = outputs['loss_rcnn_kps'].mean()
+                    loss_rcnn_keypoints = outputs['loss_rcnn_keypoints'].mean()
                     loss += loss_rcnn_keypoints
 
                 loss_avg += loss.data.cpu().numpy()[0]
