@@ -66,6 +66,10 @@ class keypoint_outputs(nn.Module):
 
         if self.upsample_heatmap:
             blob_name = 'kps_score_lowres'
+            detectron_weight_mapping.update({
+                'upsample.upconv.weight': None,  # 0: don't load from or save to checkpoint
+                'upsample.upconv.bias': None
+            })
         else:
             blob_name = 'kps_score'
         detectron_weight_mapping.update({

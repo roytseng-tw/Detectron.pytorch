@@ -40,7 +40,7 @@ def load_pretrained_imagenet_weights(model):
 
     pattern = dwh.resnet_weights_name_pattern()
 
-    name_mapping, _ = model.detectron_weight_mapping()
+    name_mapping, _ = model.detectron_weight_mapping
 
     for k, v in name_mapping.items():
         if v is not None:

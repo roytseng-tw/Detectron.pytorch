@@ -7,7 +7,7 @@ import torch
 
 
 def load_detectron_weight(net, detectron_weight_file):
-    name_mapping, orphan_in_detectron = net.detectron_weight_mapping()
+    name_mapping, orphan_in_detectron = net.detectron_weight_mapping
 
     with open(detectron_weight_file, 'rb') as fp:
         src_blobs = pickle.load(fp, encoding='latin1')
@@ -17,7 +17,7 @@ def load_detectron_weight(net, detectron_weight_file):
     params = net.state_dict()
     for p_name, p_tensor in params.items():
         d_name = name_mapping[p_name]
-        if d_name is not None:
+        if d_name: # if not None of 0
             p_tensor.copy_(torch.Tensor(src_blobs[d_name]))
 
 
@@ -40,7 +40,7 @@ if __name__ == '__main__':
 
     # pprint(list(net.state_dict().keys()), width=1)
 
-    mapping, orphans = net.detectron_weight_mapping()
+    mapping, orphans = net.detectron_weight_mapping
     state_dict = net.state_dict()
 
     for k in mapping.keys():

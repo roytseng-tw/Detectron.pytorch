@@ -46,6 +46,10 @@ class Generalized_RCNN(nn.Module):
     def __init__(self):
         super().__init__()
 
+        # For cache
+        self.mapping_to_detectron = None
+        self.orphans_in_detectron = None
+
         # Backbone for feature extraction
         self.Conv_Body = get_func(cfg.MODEL.CONV_BODY)()
 
@@ -290,15 +294,19 @@ class Generalized_RCNN(nn.Module):
             raise ValueError('You should call this function only on inference.'
                              'Set the network in inference mode by net.eval().')
 
+    @property
     def detectron_weight_mapping(self):
-        d_wmap = {}  # detectron_weight_mapping
-        d_orphan = []  # detectron orphan weight list
-        for name, m_child in self.named_children():
-            if list(m_child.parameters()):  # if module has any parameter
-                child_map, child_orphan = m_child.detectron_weight_mapping()
-                d_orphan.extend(child_orphan)
-                for key, value in child_map.items():
-                    new_key = name + '.' + key
-                    d_wmap[new_key] = value
-
-        return d_wmap, d_orphan
+        if self.mapping_to_detectron is None:
+            d_wmap = {}  # detectron_weight_mapping
+            d_orphan = []  # detectron orphan weight list
+            for name, m_child in self.named_children():
+                if list(m_child.parameters()):  # if module has any parameter
+                    child_map, child_orphan = m_child.detectron_weight_mapping()
+                    d_orphan.extend(child_orphan)
+                    for key, value in child_map.items():
+                        new_key = name + '.' + key
+                        d_wmap[new_key] = value
+            self.mapping_to_detectron = d_wmap
+            self.orphans_in_detectron = d_orphan
+        
+        return self.mapping_to_detectron, self.orphans_in_detectron

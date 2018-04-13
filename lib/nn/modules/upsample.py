@@ -41,15 +41,13 @@ class BilinearInterpolation2d(nn.Module):
         )
         kernel[range(in_channels), range(out_channels), :, :] = bil_filt
 
-        self.weight = Variable(torch.from_numpy(kernel))
-        self.bias = Variable(torch.zeros(out_channels))
+        self.upconv = nn.ConvTranspose2d(in_channels, out_channels, kernel_size,
+                                         stride=self.up_scale, padding=self.padding)
 
-    def _apply(self, fn):
-        # Will incurred by .cuda() on outer most module
-        self.weight = fn(self.weight)
-        self.bias = fn(self.bias)
-        return self
+        self.upconv.weight.data.copy_(torch.from_numpy(kernel))
+        self.upconv.bias.data.fill_(0)
+        self.upconv.weight.requires_grad = False
+        self.upconv.bias.requires_grad = False
 
     def forward(self, x):
-        return F.conv_transpose2d(x, self.weight, self.bias,
-                                  stride=self.up_scale, padding=self.padding)
+        return self.upconv(x)

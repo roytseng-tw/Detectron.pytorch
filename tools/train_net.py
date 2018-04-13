@@ -131,25 +131,6 @@ def parse_args():
     return parser.parse_args()
 
 
-def save(output_dir, args, epoch, step, model, optimizer, iters_per_epoch):
-    """Save checkpoint"""
-    if args.no_save:
-        return
-    ckpt_dir = os.path.join(output_dir, 'ckpt')
-    if not os.path.exists(ckpt_dir):
-        os.makedirs(ckpt_dir)
-    save_name = os.path.join(ckpt_dir, 'model_{}_{}.pth'.format(epoch, step))
-    if args.mGPUs:
-        model = model.module
-    torch.save({
-        'epoch': epoch,
-        'step': step,
-        'iters_per_epoch': iters_per_epoch,
-        'model': model.state_dict(),
-        'optimizer': optimizer.state_dict()}, save_name)
-    print('save model: {}'.format(save_name))
-
-
 def main():
     """Main function"""
 
@@ -267,7 +248,7 @@ def main():
         load_name = args.load_ckpt
         logging.info("loading checkpoint %s", load_name)
         checkpoint = torch.load(load_name, map_location=lambda storage, loc: storage)
-        maskRCNN.load_state_dict(checkpoint['model'])
+        net_utils.load_ckpt(maskRCNN, checkpoint['model'])
         if args.resume:
             assert checkpoint['iters_per_epoch'] == train_size // args.batch_size, \
                 "iters_per_epoch should match for resume"
@@ -365,7 +346,7 @@ def main():
                 optimizer.step()
 
                 if (step+1) % ckpt_interval_per_epoch == 0:
-                    save(output_dir, args, epoch, step, maskRCNN, optimizer, iters_per_epoch)
+                    net_utils.save_ckpt(output_dir, args, epoch, step, maskRCNN, optimizer, iters_per_epoch)
 
                 if (step+1) % args.disp_interval == 0:
                     if (step + 1 - args.start_iter) >= args.disp_interval:  # for the case of resume
@@ -414,7 +395,7 @@ def main():
 
             # ---- End of epoch ----
             # save checkpoint
-            save(output_dir, args, epoch, step, maskRCNN, optimizer, iters_per_epoch)
+            net_utils.save_ckpt(output_dir, args, epoch, step, maskRCNN, optimizer, iters_per_epoch)
             # reset timer
             timers['train_loop'].reset()
             # reset starting iter number after first epoch
@@ -422,7 +403,7 @@ def main():
 
     except (RuntimeError, KeyboardInterrupt) as e:
         print('Save on exception:', e)
-        save(output_dir, args, epoch, step, maskRCNN, optimizer, iters_per_epoch)
+        net_utils.save_ckpt(output_dir, args, epoch, step, maskRCNN, optimizer, iters_per_epoch)
         stack_trace = traceback.format_exc()
         print(stack_trace)
 

@@ -1,4 +1,5 @@
 import logging
+import os
 import numpy as np
 
 import torch
@@ -110,3 +111,33 @@ def affine_grid_gen(rois, input_size, grid_size):
     grid = F.affine_grid(theta, torch.Size((rois.size(0), 1, grid_size, grid_size)))
 
     return grid
+
+
+def save_ckpt(output_dir, args, epoch, step, model, optimizer, iters_per_epoch):
+    """Save checkpoint"""
+    if args.no_save:
+        return
+    ckpt_dir = os.path.join(output_dir, 'ckpt')
+    if not os.path.exists(ckpt_dir):
+        os.makedirs(ckpt_dir)
+    save_name = os.path.join(ckpt_dir, 'model_{}_{}.pth'.format(epoch, step))
+    if args.mGPUs:
+        model = model.module
+    model_state_dict = model.state_dict()
+    torch.save({
+        'epoch': epoch,
+        'step': step,
+        'iters_per_epoch': iters_per_epoch,
+        'model': model.state_dict(),
+        'optimizer': optimizer.state_dict()}, save_name)
+    logger.info('save model: %s', save_name)
+
+
+def load_ckpt(model, ckpt):
+    """Load checkpoint"""
+    mapping, _ = model.detectron_weight_mapping
+    state_dict = {}
+    for name in ckpt:
+        if mapping[name]:
+            state_dict[name] = ckpt[name]
+    model.load_state_dict(state_dict, strict=False)

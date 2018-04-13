@@ -30,7 +30,6 @@ class mask_rcnn_outputs(nn.Module):
             # Predict mask using Conv
             self.classify = nn.Conv2d(dim_in, n_classes, 1, 1, 0)
             if cfg.MRCNN.UPSAMPLE_RATIO > 1:
-                # self.upsample = nn.UpsamplingBilinear2d(scale_factor=cfg.MRCNN.UPSAMPLE_RATIO)
                 self.upsample = mynn.BilinearInterpolation2d(
                     n_classes, n_classes, cfg.MRCNN.UPSAMPLE_RATIO)
         self._init_weights()
@@ -50,6 +49,11 @@ class mask_rcnn_outputs(nn.Module):
             'classify.weight': 'mask_fcn_logits_w',
             'classify.bias': 'mask_fcn_logits_b'
         }
+        if hasattr(self, 'upsample'):
+            mapping.update({
+                'upsample.upconv.weight': None,  # don't load from or save to checkpoint
+                'upsample.upconv.bias': None
+            })
         orphan_in_detectron = []
         return mapping, orphan_in_detectron
 
@@ -209,7 +213,7 @@ class mask_rcnn_fcn_head_v0upshare(nn.Module):
     def detectron_weight_mapping(self):
         detectron_weight_mapping, orphan_in_detectron = \
           ResNet.residual_stage_detectron_mapping(self.res5, 'res5', 3, 5)
-        # Assign None for res5 modules, indicating not care
+        # Assign None for res5 modules, do not load from or save to checkpoint
         for k in detectron_weight_mapping:
             detectron_weight_mapping[k] = None
 
