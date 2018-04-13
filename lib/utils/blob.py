@@ -73,12 +73,7 @@ def im_list_to_blob(ims):
     """
     if not isinstance(ims, list):
         ims = [ims]
-    max_shape = np.array([im.shape for im in ims]).max(axis=0)
-    # Pad the image so they can be divisible by a stride
-    if cfg.FPN.FPN_ON:
-        stride = float(cfg.FPN.COARSEST_STRIDE)
-        max_shape[0] = int(np.ceil(max_shape[0] / stride) * stride)
-        max_shape[1] = int(np.ceil(max_shape[1] / stride) * stride)
+    max_shape = get_max_shape([im.shape[:2] for im in ims])
 
     num_images = len(ims)
     blob = np.zeros(
@@ -91,6 +86,19 @@ def im_list_to_blob(ims):
     channel_swap = (0, 3, 1, 2)
     blob = blob.transpose(channel_swap)
     return blob
+
+
+def get_max_shape(im_shapes):
+    """Calculate max spatial size (h, w) for batching given a list of image shapes
+    """
+    max_shape = np.array(im_shapes).max(axis=0)
+    assert max_shape.size == 2
+    # Pad the image so they can be divisible by a stride
+    if cfg.FPN.FPN_ON:
+        stride = float(cfg.FPN.COARSEST_STRIDE)
+        max_shape[0] = int(np.ceil(max_shape[0] / stride) * stride)
+        max_shape[1] = int(np.ceil(max_shape[1] / stride) * stride)
+    return max_shape
 
 
 def prep_im_for_blob(im, pixel_means, target_sizes, max_size):
@@ -119,6 +127,8 @@ def prep_im_for_blob(im, pixel_means, target_sizes, max_size):
 
 
 def get_im_blob_sizes(im_shape, target_sizes, max_size):
+    """Calculate im blob size for multiple target_sizes given original im shape
+    """
     im_size_min = np.min(im_shape)
     im_size_max = np.max(im_shape)
     im_sizes = []
@@ -129,6 +139,8 @@ def get_im_blob_sizes(im_shape, target_sizes, max_size):
 
 
 def get_target_scale(im_size_min, im_size_max, target_size, max_size):
+    """Calculate target resize scale
+    """
     im_scale = float(target_size) / float(im_size_min)
     # Prevent the biggest axis from being more than max_size
     if np.round(im_scale * im_size_max) > max_size:

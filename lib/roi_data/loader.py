@@ -21,7 +21,7 @@ class RoiDataLoader(data.Dataset):
         self.DATA_SIZE = len(self._roidb)
 
     def __getitem__(self, index_tuple):
-        index, ratio, imsizes = index_tuple
+        index, ratio = index_tuple
         single_db = [self._roidb[index]]
         blobs, valid = get_minibatch(single_db)
         #TODO: Check if minibatch is valid ? If not, abandon it.
@@ -46,10 +46,7 @@ class RoiDataLoader(data.Dataset):
                         entry[key] = entry[key][valid_inds]
                 entry['segms'] = [entry['segms'][ind] for ind in valid_inds]
 
-        # Padding the image based on the ratio
-        self.pad_data(blobs, imsizes)
-
-        blobs['roidb'] = blob_utils.serialize(blobs['roidb'])  # CHECK: maybe we should serialize in collate_fn
+        blobs['roidb'] = blob_utils.serialize(blobs['roidb'])  # CHECK: maybe we can serialize in collate_fn
 
         return blobs
 
@@ -114,14 +111,6 @@ class RoiDataLoader(data.Dataset):
             np.clip(boxes[:, 2], 0, size_crop - 1, out=boxes[:, 2])
             blobs['roidb'][0]['boxes'] = boxes
 
-    def pad_data(self, blobs, imsizes):
-        data_height, data_width = map(int, blobs['im_info'][:2])
-        target_height, target_width = map(int, imsizes[0])
-        data_padded = np.zeros((3, target_height, target_width), dtype=np.float32)
-        data_padded[:, :data_height, :data_width] = blobs['data']
-        blobs['data'] = data_padded
-        blobs['im_info'][:2] = data_padded.shape[1:]
-
     def __len__(self):
         return self.DATA_SIZE
 
@@ -154,38 +143,16 @@ def cal_minibatch_ratio(ratio_list):
     return ratio_list_minibatch
 
 
-def cal_minibatch_imsizes(im_sizes_list):
-    """Given the ratio_list, we want to make the SIZE same for each minibatch on each GPU.
-    This should work for considering cfg.TRAIN.MAX_SIZE and multiple cfg.TRAIN.SCALES (#TODO maybe).
-    """
-    DATA_SIZE = len(im_sizes_list)
-    imsizes_list_minibatch = np.empty((DATA_SIZE, len(cfg.TRAIN.SCALES), 2))
-    num_minibatch = int(np.ceil(DATA_SIZE / cfg.TRAIN.IMS_PER_BATCH))  # Include leftovers
-    for i in range(num_minibatch):
-        left_idx = i * cfg.TRAIN.IMS_PER_BATCH
-        right_idx = min((i+1) * cfg.TRAIN.IMS_PER_BATCH - 1, DATA_SIZE - 1)
-
-        imsizes = im_sizes_list[left_idx:(right_idx+1)]
-
-        # following logic is designed for single cfg.TRAIN.SCALES
-        # for multi scales we should probably grouping images with similar scales as well as ratio
-        imsizes_list_minibatch[left_idx:(right_idx+1)] = np.max(imsizes.reshape(-1, 2), axis=0)
-
-    return imsizes_list_minibatch
-
-
 class MinibatchSampler(sampler.Sampler):
-    def __init__(self, ratio_list, ratio_index, im_sizes_list):
+    def __init__(self, ratio_list, ratio_index):
         self.ratio_list = ratio_list
         self.ratio_index = ratio_index
-        self.im_sizes_list = im_sizes_list
         self.num_data = len(ratio_list)
 
         if cfg.TRAIN.ASPECT_GROUPING:
             # Given the ratio_list, we want to make the ratio same
             # for each minibatch on each GPU.
             self.ratio_list_minibatch = cal_minibatch_ratio(ratio_list)
-            self.imsizes_list_minibatch = cal_minibatch_imsizes(im_sizes_list)
 
     def __iter__(self):
         if cfg.TRAIN.ASPECT_GROUPING:
@@ -198,18 +165,14 @@ class MinibatchSampler(sampler.Sampler):
                 indices = np.append(indices, np.arange(round_num_data, round_num_data + rem))
             ratio_index = self.ratio_index[indices]
             ratio_list_minibatch = self.ratio_list_minibatch[indices]
-            imsizes_list_minibatch = self.imsizes_list_minibatch[indices]
         else:
             rand_perm = npr.permutation(self.num_data)
             ratio_list = self.ratio_list[rand_perm]
             ratio_index = self.ratio_index[rand_perm]
-            im_sizes_list = self.im_sizes_list[rand_perm]
             # re-calculate minibatch ratio list
             ratio_list_minibatch = cal_minibatch_ratio(ratio_list)
-            imsizes_list_minibatch = cal_minibatch_imsizes(im_sizes_list)
 
-        return iter(zip(ratio_index.tolist(), ratio_list_minibatch.tolist(),
-                        imsizes_list_minibatch.tolist()))
+        return iter(zip(ratio_index.tolist(), ratio_list_minibatch.tolist()))
 
     def __len__(self):
         return self.num_data
@@ -226,9 +189,23 @@ def collate_minibatch(list_of_blobs):
     list_of_roidb = [blobs.pop('roidb') for blobs in list_of_blobs]
     for i in range(0, len(list_of_blobs), cfg.TRAIN.IMS_PER_BATCH):
         mini_list = list_of_blobs[i:(i + cfg.TRAIN.IMS_PER_BATCH)]
+        # Pad image data
+        mini_list = pad_image_data(mini_list)
         minibatch = default_collate(mini_list)
         minibatch['roidb'] = list_of_roidb[i:(i + cfg.TRAIN.IMS_PER_BATCH)]
         for key in minibatch:
             Batch[key].append(minibatch[key])
 
     return Batch
+
+
+def pad_image_data(list_of_blobs):
+    max_shape = blob_utils.get_max_shape([blobs['data'].shape[1:] for blobs in list_of_blobs])
+    output_list = []
+    for blobs in list_of_blobs:
+        data_padded = np.zeros((3, max_shape[0], max_shape[1]), dtype=np.float32)
+        _, h, w = blobs['data'].shape
+        data_padded[:, :h, :w] = blobs['data']
+        blobs['data'] = data_padded
+        output_list.append(blobs)
+    return output_list

@@ -67,7 +67,7 @@ def combined_roidb_for_training(dataset_names, proposal_files):
 
     if cfg.TRAIN.ASPECT_GROUPING or cfg.TRAIN.ASPECT_CROPPING:
         logger.info('Computing image aspect ratios and ordering the ratios...')
-        ratio_list, ratio_index, im_sizes_list = rank_for_training(roidb)
+        ratio_list, ratio_index = rank_for_training(roidb)
         logger.info('done')
     else:
         ratio_list, ratio_index = None, None
@@ -78,7 +78,7 @@ def combined_roidb_for_training(dataset_names, proposal_files):
 
     _compute_and_log_stats(roidb)
 
-    return roidb, ratio_list, ratio_index, im_sizes_list
+    return roidb, ratio_list, ratio_index
 
 
 def extend_with_flipped_entries(roidb, dataset):
@@ -158,24 +158,19 @@ def rank_for_training(roidb):
     need_crop_cnt = 0
 
     ratio_list = []
-    im_sizes_list = []
     for entry in roidb:
         width = entry['width']
         height = entry['height']
         ratio = width / float(height)
-        im_sizes = blob_utils.get_im_blob_sizes(
-            np.array([height, width]), cfg.TRAIN.SCALES, cfg.TRAIN.MAX_SIZE)
 
         if cfg.TRAIN.ASPECT_CROPPING:
             if ratio > RATIO_HI:
                 entry['need_crop'] = True
                 ratio = RATIO_HI
-                im_sizes[:, 1] = np.ceil(im_sizes[:, 0] * RATIO_HI)
                 need_crop_cnt += 1
             elif ratio < RATIO_LO:
                 entry['need_crop'] = True
                 ratio = RATIO_LO
-                im_sizes[:, 0] = np.ceil(im_sizes[:, 1] / RATIO_LO)
                 need_crop_cnt += 1
             else:
                 entry['need_crop'] = False
@@ -183,16 +178,13 @@ def rank_for_training(roidb):
             entry['need_crop'] = False
 
         ratio_list.append(ratio)
-        im_sizes_list.append(im_sizes)
 
     if cfg.TRAIN.ASPECT_CROPPING:
         logging.info('Number of entries that need to be cropped: %d. Ratio bound: [%.2f, %.2f]',
                      need_crop_cnt, RATIO_LO, RATIO_HI)
     ratio_list = np.array(ratio_list)
     ratio_index = np.argsort(ratio_list)
-    im_sizes_list = np.array(im_sizes_list)
-    return ratio_list[ratio_index], ratio_index, im_sizes_list[ratio_index]
-
+    return ratio_list[ratio_index], ratio_index
 
 def add_bbox_regression_targets(roidb):
     """Add information needed to train bounding-box regressors."""
