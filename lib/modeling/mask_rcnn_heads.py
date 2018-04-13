@@ -9,6 +9,7 @@ from torch.autograd import Variable
 
 from core.config import cfg
 from modeling import ResNet
+import nn as mynn
 
 
 # ---------------------------------------------------------------------------- #
@@ -29,8 +30,9 @@ class mask_rcnn_outputs(nn.Module):
             # Predict mask using Conv
             self.classify = nn.Conv2d(dim_in, n_classes, 1, 1, 0)
             if cfg.MRCNN.UPSAMPLE_RATIO > 1:
-                #TODO Detectron use conv with bilinear-interpolation-initialized weight
-                self.upsample = nn.UpsamplingBilinear2d(scale_factor=cfg.MRCNN.UPSAMPLE_RATIO)
+                # self.upsample = nn.UpsamplingBilinear2d(scale_factor=cfg.MRCNN.UPSAMPLE_RATIO)
+                self.upsample = mynn.BilinearInterpolation2d(
+                    n_classes, n_classes, cfg.MRCNN.UPSAMPLE_RATIO)
         self._init_weights()
 
     def _init_weights(self):

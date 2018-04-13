@@ -7,6 +7,7 @@ import torch.nn.init as init
 from torch.autograd import Variable
 
 from core.config import cfg
+import nn as mynn
 
 
 # ---------------------------------------------------------------------------- #
@@ -36,8 +37,9 @@ class keypoint_outputs(nn.Module):
             self.classify = nn.Conv2d(dim_in, cfg.KRCNN.NUM_KEYPOINTS, 1, 1, padding=0)
 
         if self.upsample_heatmap:
-            #TODO Detectron use conv with bilinear-interpolation-initialized weight
-            self.upsample = nn.UpsamplingBilinear2d(scale_factor=cfg.KRCNN.UP_SCALE)
+            # self.upsample = nn.UpsamplingBilinear2d(scale_factor=cfg.KRCNN.UP_SCALE)
+            self.upsample = mynn.BilinearInterpolation2d(
+                cfg.KRCNN.NUM_KEYPOINTS, cfg.KRCNN.NUM_KEYPOINTS, cfg.KRCNN.UP_SCALE)
 
         self._init_weights()
 
@@ -75,7 +77,7 @@ class keypoint_outputs(nn.Module):
 
     def forward(self, x):
         if cfg.KRCNN.USE_DECONV:
-            x = self.deconv(x)
+            x = F.relu(self.deconv(x), inplace=True)
         x = self.classify(x)
         if self.upsample_heatmap:
             x = self.upsample(x)
@@ -153,9 +155,9 @@ class roi_pose_head_v1convX(nn.Module):
     def detectron_weight_mapping(self):
         detectron_weight_mapping = {}
         orphan_in_detectron = []
-        for i in range(len(self.conv_fcn)):
-            detectron_weight_mapping['conv_fcn.%d.weight' % i] = 'conv_fcn%d_w' % (i+1)
-            detectron_weight_mapping['conv_fcn.%d.bias' % i] = 'conv_fcn%d_b' % (i+1)
+        for i in range(cfg.KRCNN.NUM_STACKED_CONVS):
+            detectron_weight_mapping['conv_fcn.%d.weight' % (2*i)] = 'conv_fcn%d_w' % (i+1)
+            detectron_weight_mapping['conv_fcn.%d.bias' % (2*i)] = 'conv_fcn%d_b' % (i+1)
 
         return detectron_weight_mapping, orphan_in_detectron
 
