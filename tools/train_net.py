@@ -308,7 +308,7 @@ def main():
             timers['train_loop'].tic()
 
             # adjust learning rate
-            if args.lr_decay_epochs and epoch == args.lr_decay_epochs[0]:
+            if args.lr_decay_epochs and epoch == args.lr_decay_epochs[0] and args.start_iter == 0:
                 args.lr_decay_epochs.pop(0)
                 net_utils.decay_learning_rate(optimizer, lr, cfg.SOLVER.GAMMA)
                 lr *= cfg.SOLVER.GAMMA
