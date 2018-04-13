@@ -58,9 +58,10 @@ def parse_args():
 
     parser.add_argument(
         '--image_dir',
-        dest='image_dir',
-        help='directory to load images for demo',
-        default="demo/sample_images")
+        help='directory to load images for demo')
+    parser.add_argument(
+        '--images', nargs='+',
+        help='images to infer. Must not use with --image_dir')
     parser.add_argument(
         '--output_dir',
         help='directory to save demo results',
@@ -82,6 +83,9 @@ def main():
     args = parse_args()
     print('Called with args:')
     print(args)
+
+    assert args.image_dir or args.images
+    assert bool(args.image_dir) ^ bool(args.images)
 
     if args.dataset.startswith("coco"):
         dataset = datasets.get_coco_dataset()
@@ -121,21 +125,23 @@ def main():
                                  minibatch=True)
 
     maskRCNN.eval()
-
-    imglist = misc_utils.get_imagelist_from_dir(args.image_dir)
+    if args.image_dir:
+        imglist = misc_utils.get_imagelist_from_dir(args.image_dir)
+    else:
+        imglist = args.images
     num_images = len(imglist)
     if not os.path.exists(args.output_dir):
         os.makedirs(args.output_dir)
 
     for i in xrange(num_images):
         print('img', i)
-        im = cv2.imread(os.path.join(args.image_dir, imglist[i]))
+        im = cv2.imread(imglist[i])
 
         timers = defaultdict(Timer)
 
         cls_boxes, cls_segms, cls_keyps = im_detect_all(maskRCNN, im, timers=timers)
 
-        im_name, _ = os.path.splitext(imglist[i])
+        im_name, _ = os.path.splitext(os.path.basename(imglist[i]))
         vis_utils.vis_one_image(
             im[:, :, ::-1],  # BGR -> RGB for visualization
             im_name,
@@ -150,7 +156,7 @@ def main():
             kp_thresh=2
         )
 
-    if args.merge_pdfs:
+    if args.merge_pdfs and num_images > 1:
         merge_out_path = '{}/results.pdf'.format(args.output_dir)
         if os.path.exists(merge_out_path):
             os.remove(merge_out_path)

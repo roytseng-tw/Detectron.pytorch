@@ -1,3 +1,6 @@
 [MASTER]
 extension-pkg-whitelist=numpy,torch,cv2
 init-hook="sys.path.insert(0, './tools'); import _init_paths"
+
+[MESSAGES CONTROL]
+disable=wrong-import-position

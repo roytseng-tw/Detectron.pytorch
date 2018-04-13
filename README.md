@@ -2,13 +2,17 @@
 
 <div align="center">
 
-<img src="demo/33823288584_1d21cf0a26_k-pytorch_detectron_weight.jpg" width="700px"/>
+<img src="demo/33823288584_1d21cf0a26_k-pydetectron-R101-FPN.jpg" width="700px"/>
 
-<p> Visualization using Detectron's pretrained weight of e2e_mask_rcnn-R-50-C4_2x.</p>
+<p> Example output of *e2e_mask_rcnn-R-101-FPN_2x* using Detectron pretrained weight.</p>
 
-<img src="demo/33823288584_1d21cf0a26_k-detectron.jpg" width="700px"/>
+<img src="demo/33823288584_1d21cf0a26_k-detectron-R101-FPN.jpg" width="700px"/>
 
-<p>Detectron's corresponding output by infer_simple.py. </p>
+<p>Corresponding example output from Detectron. </p>
+
+<img src="demo/img1_keypoints-pydetectron-R50-FPN.jpg" width="700px"/>
+
+<p>Example output of *e2e_keypoint_rcnn-R-50-FPN_s1x* using Detectron pretrained weight.</p>
 
 </div>
 
@@ -37,13 +41,20 @@ This implementation has the following features:
 
 ## Supported Network modules
 
-- Backbone architecture: `ResNet50_conv4_body`, `ResNet50_conv5_body`, `ResNet101_Conv4_Body`, `ResNet101_Conv5_Body`, `ResNet152_Conv5_Body`
-  - For now only resnet backbone is implemented. Plan to add FPN.
-- Box head: `ResNet_roi_conv5_head`
-- Mask head: `mask_rcnn_fcn_head_v0upshare`, `mask_rcnn_fcn_head_v0up`
+- Backbone architecture: 
+
+  - ResNet series: `ResNet50_conv4_body`, `ResNet50_conv5_body`, `ResNet101_Conv4_Body`, `ResNet101_Conv5_Body`, `ResNet152_Conv5_Body`
+  - FPN: `fpn_ResNet50_conv5_body`,  `fpn_ResNet50_conv5_P2only_body`, `fpn_ResNet101_conv5_body`,  `fpn_ResNet101_conv5_P2only_body`,  `fpn_ResNet152_conv5_body`,  `fpn_ResNet152_conv5_P2only_body`
+
+  ResNeXt are also implemented but not yet tested.
+
+- Box head: `ResNet_roi_conv5_head`, `roi_2mlp_head`
+
+- Mask head: `mask_rcnn_fcn_head_v0upshare`, `mask_rcnn_fcn_head_v0up`, `mask_rcnn_fcn_head_v1up4convs`, `mask_rcnn_fcn_head_v1up`
+
 - Keypoints head: `roi_pose_head_v1convX`
 
-**NOTE**: the naming is similar to the one used in Detectron. Just remove the prepending `add_` if it is present.
+**NOTE**: the naming is similar to the one used in Detectron. Just remove the prepending `add_` if it any.
 
 ## Supported Datasets
 
@@ -179,6 +190,14 @@ I use ImageNet pretrained weights from Caffe for the backbone networks.
 
 Download them and put them into the `{repo_root}/data/pretrained_model`.
 
+You can the following command to download them all: 
+
+​	- extra required packages: `argparse_color_formater`, `colorama`
+
+```bash
+python tools/download_imagenet_weights.py
+```
+
 **NOTE**: Caffe pretrained weights have slightly better performance than Pytorch pretrained. Suggest to use Caffe pretrained models from the above link to reproduce the results. By the way, Detectron also use pretrained weights from Caffe. 
 
 **If you want to use pytorch pre-trained models, please remember to transpose images from BGR to RGB, and also use the same data preprocessing (minus mean and normalize) as used in Pytorch pretrained model.**
@@ -188,7 +207,7 @@ Download them and put them into the `{repo_root}/data/pretrained_model`.
 - Train mask-rcnn with res50 backbone from scratch
 
   ````bash
-  python train_net.py --dataset coco2017 --cfg cfgs/e2e_mask_rcnn_R-50-C4.yml --use_tfboard --bs {batch_size} --nw {num_workers}
+  python tools/train_net.py --dataset coco2017 --cfg configs/e2e_mask_rcnn_R-50-C4.yml --use_tfboard --bs {batch_size} --nw {num_workers}
   ````
 
   Use `--bs` to overwrite the default batch size (e.g. 8) to a proper value that fits into your GPUs. Simliar for `--nw`, number of data loader threads defaults to 4 in config.py.
@@ -198,15 +217,21 @@ Download them and put them into the `{repo_root}/data/pretrained_model`.
 - Resume training with exactly same settings from the end of an epoch
 
   ```bash
-  python train_net.py --dataset coco2017 --cfg cfgs/e2e_mask_rcnn_R-50-C4.yml --resume --load_ckpt {path/to/the/checkpoint}
+  python tools/train_net.py --dataset coco2017 --cfg configs/e2e_mask_rcnn_R-50-C4.yml --resume --load_ckpt {path/to/the/checkpoint} --bs {batch_size}
   ```
 
   **The difference of w/ and w/o `--resume`**: Optimizer state will be loaded from the checkpoint file if  `--resume` is specified. Otherwise, not.
 
+- Train keypoint-rcnn
+
+  ```bash
+  python tools/train_net.py --dataset keypoints_coco2017 ...
+  ```
+
 - Fine tune from the Detectron pretrained weights
 
   ```bash
-  python train_net.py --dataset coco2017 --cfg cfgs/e2e_mask_rcnn_R-50-C4.yml --load_detectron {path/to/detectron/weight}
+  python train_net.py --dataset coco2017 --cfg cfgs/e2e_mask_rcnn_R-50-C4.yml --load_detectron {path/to/detectron/weight} --bs {batch_size}
   ```
 
   **NOTE**: optimizer state (momentums for SGD) are not loaded. (To be implemented)
@@ -214,10 +239,10 @@ Download them and put them into the `{repo_root}/data/pretrained_model`.
 ## Inference
 
 ```bash
-python infer_simple.py --dataset coco --cfg cfgs/e2e_mask_rcnn_R-50-C4.yml --load_detectron {path/to/detectron/weight} --image_dir {dir/of/input/images}  --output_dir {dir/to/save/visualizations}
+python tools/infer_simple.py --dataset coco --cfg cfgs/e2e_mask_rcnn_R-50-C4.yml --load_detectron {path/to/detectron/weight} --image_dir {dir/of/input/images}  --output_dir {dir/to/save/visualizations}
 ```
 
-`--image_dir ` defaults to `demo/sample_images`. `--output_dir` defaults to `infer_outputs`.
+ `--output_dir` defaults to `infer_outputs`.
 
 ## Benchmark
 
@@ -231,4 +256,4 @@ TBA
   <img src="demo/e2e_mask_rcnn_R-50-C4/train_from_scratch_epoch1_bs4/img2.jpg" height="500px"/>
   <img src="demo/e2e_mask_rcnn_R-50-C4/train_from_scratch_epoch1_bs4/img3.jpg" height="500px"/>
   <img src="demo/e2e_mask_rcnn_R-50-C4/train_from_scratch_epoch1_bs4/img4.jpg" height="500px"/>
- 
+
