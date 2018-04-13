@@ -59,8 +59,13 @@ def boxes_area(boxes):
     w = (boxes[:, 2] - boxes[:, 0] + 1)
     h = (boxes[:, 3] - boxes[:, 1] + 1)
     areas = w * h
-    assert np.all(areas >= 0), 'Negative areas founds'
-    return areas
+
+    neg_area_idx = np.where(areas < 0)[0]
+    if neg_area_idx.size:
+        raise RuntimeWarning("Negative areas founds: %d" % neg_area_idx.size)
+    #TODO proper warm up and learning rate may reduce the prob of assertion fail
+    # assert np.all(areas >= 0), 'Negative areas founds'
+    return areas, neg_area_idx
 
 
 def unique_boxes(boxes, scale=1.0):
