@@ -236,6 +236,118 @@ __C.TEST.FORCE_JSON_DATASET_EVAL = False
 # Not set for 1-stage models and 2-stage models with RPN subnetwork enabled
 __C.TEST.PRECOMPUTED_PROPOSALS = True
 
+
+# ---------------------------------------------------------------------------- #
+# Test-time augmentations for bounding box detection
+# See configs/test_time_aug/e2e_mask_rcnn_R-50-FPN_2x.yaml for an example
+# ---------------------------------------------------------------------------- #
+__C.TEST.BBOX_AUG = AttrDict()
+
+# Enable test-time augmentation for bounding box detection if True
+__C.TEST.BBOX_AUG.ENABLED = False
+
+# Heuristic used to combine predicted box scores
+#   Valid options: ('ID', 'AVG', 'UNION')
+__C.TEST.BBOX_AUG.SCORE_HEUR = 'UNION'
+
+# Heuristic used to combine predicted box coordinates
+#   Valid options: ('ID', 'AVG', 'UNION')
+__C.TEST.BBOX_AUG.COORD_HEUR = 'UNION'
+
+# Horizontal flip at the original scale (id transform)
+__C.TEST.BBOX_AUG.H_FLIP = False
+
+# Each scale is the pixel size of an image's shortest side
+__C.TEST.BBOX_AUG.SCALES = ()
+
+# Max pixel size of the longer side
+__C.TEST.BBOX_AUG.MAX_SIZE = 4000
+
+# Horizontal flip at each scale
+__C.TEST.BBOX_AUG.SCALE_H_FLIP = False
+
+# Apply scaling based on object size
+__C.TEST.BBOX_AUG.SCALE_SIZE_DEP = False
+__C.TEST.BBOX_AUG.AREA_TH_LO = 50**2
+__C.TEST.BBOX_AUG.AREA_TH_HI = 180**2
+
+# Each aspect ratio is relative to image width
+__C.TEST.BBOX_AUG.ASPECT_RATIOS = ()
+
+# Horizontal flip at each aspect ratio
+__C.TEST.BBOX_AUG.ASPECT_RATIO_H_FLIP = False
+
+# ---------------------------------------------------------------------------- #
+# Test-time augmentations for mask detection
+# See configs/test_time_aug/e2e_mask_rcnn_R-50-FPN_2x.yaml for an example
+# ---------------------------------------------------------------------------- #
+__C.TEST.MASK_AUG = AttrDict()
+
+# Enable test-time augmentation for instance mask detection if True
+__C.TEST.MASK_AUG.ENABLED = False
+
+# Heuristic used to combine mask predictions
+# SOFT prefix indicates that the computation is performed on soft masks
+#   Valid options: ('SOFT_AVG', 'SOFT_MAX', 'LOGIT_AVG')
+__C.TEST.MASK_AUG.HEUR = 'SOFT_AVG'
+
+# Horizontal flip at the original scale (id transform)
+__C.TEST.MASK_AUG.H_FLIP = False
+
+# Each scale is the pixel size of an image's shortest side
+__C.TEST.MASK_AUG.SCALES = ()
+
+# Max pixel size of the longer side
+__C.TEST.MASK_AUG.MAX_SIZE = 4000
+
+# Horizontal flip at each scale
+__C.TEST.MASK_AUG.SCALE_H_FLIP = False
+
+# Apply scaling based on object size
+__C.TEST.MASK_AUG.SCALE_SIZE_DEP = False
+__C.TEST.MASK_AUG.AREA_TH = 180**2
+
+# Each aspect ratio is relative to image width
+__C.TEST.MASK_AUG.ASPECT_RATIOS = ()
+
+# Horizontal flip at each aspect ratio
+__C.TEST.MASK_AUG.ASPECT_RATIO_H_FLIP = False
+
+# ---------------------------------------------------------------------------- #
+# Test-augmentations for keypoints detection
+# configs/test_time_aug/keypoint_rcnn_R-50-FPN_1x.yaml
+# ---------------------------------------------------------------------------- #
+__C.TEST.KPS_AUG = AttrDict()
+
+# Enable test-time augmentation for keypoint detection if True
+__C.TEST.KPS_AUG.ENABLED = False
+
+# Heuristic used to combine keypoint predictions
+#   Valid options: ('HM_AVG', 'HM_MAX')
+__C.TEST.KPS_AUG.HEUR = 'HM_AVG'
+
+# Horizontal flip at the original scale (id transform)
+__C.TEST.KPS_AUG.H_FLIP = False
+
+# Each scale is the pixel size of an image's shortest side
+__C.TEST.KPS_AUG.SCALES = ()
+
+# Max pixel size of the longer side
+__C.TEST.KPS_AUG.MAX_SIZE = 4000
+
+# Horizontal flip at each scale
+__C.TEST.KPS_AUG.SCALE_H_FLIP = False
+
+# Apply scaling based on object size
+__C.TEST.KPS_AUG.SCALE_SIZE_DEP = False
+__C.TEST.KPS_AUG.AREA_TH = 180**2
+
+# Eeach aspect ratio is realtive to image width
+__C.TEST.KPS_AUG.ASPECT_RATIOS = ()
+
+# Horizontal flip at each aspect ratio
+__C.TEST.KPS_AUG.ASPECT_RATIO_H_FLIP = False
+
 # ---------------------------------------------------------------------------- #
 # Soft NMS
 # ---------------------------------------------------------------------------- #
@@ -332,6 +444,12 @@ __C.MODEL.SHARE_RES5 = False
 # If True, path to the weight file must be specified.
 # See: __C.RESNETS.IMAGENET_PRETRAINED_WEIGHTS
 __C.MODEL.LOAD_IMAGENET_PRETRAINED_WEIGHTS = True
+
+# ---------------------------------------------------------------------------- #
+# Unsupervise Pose
+# ---------------------------------------------------------------------------- #
+
+__C.MODEL.UNSUPERVISED_POSE = False
 
 
 # ---------------------------------------------------------------------------- #

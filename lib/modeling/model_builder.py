@@ -116,8 +116,6 @@ class Generalized_RCNN(nn.Module):
         return_dict = {}  # A dict to collect return variables
 
         blob_conv = self.Conv_Body(im_data)
-        if not self.training:
-            return_dict['blob_conv'] = blob_conv
 
         rpn_ret = self.RPN(blob_conv, im_info, roidb)
 
@@ -131,6 +129,9 @@ class Generalized_RCNN(nn.Module):
             # extra blobs that are used for RPN proposals, but not for RoI heads.
             blob_conv = blob_conv[-self.num_roi_levels:]
 
+        if not self.training:
+            return_dict['blob_conv'] = blob_conv
+
         if not cfg.MODEL.RPN_ONLY:
             if cfg.MODEL.SHARE_RES5 and self.training:
                 box_feat, res5_feat = self.Box_Head(blob_conv, rpn_ret)
@@ -140,7 +141,8 @@ class Generalized_RCNN(nn.Module):
             return_dict['cls_score'] = cls_score
             return_dict['bbox_pred'] = bbox_pred
         else:
-            return return_dict  # TODO: complete the returns for RPN only situation
+            # TODO: complete the returns for RPN only situation
+            pass
 
         if self.training:
             # rpn loss
@@ -204,7 +206,6 @@ class Generalized_RCNN(nn.Module):
         """
         assert method in {'RoIPoolF', 'RoICrop', 'RoIAlign'}, \
             'Unknown pooling method: {}'.format(method)
-        
 
         if isinstance(blobs_in, list):
             # FPN case: add RoIFeatureTransform to each FPN level
@@ -268,10 +269,10 @@ class Generalized_RCNN(nn.Module):
 
         return xform_out
 
-    def mask_net(self, blob_conv, mask_rois):
+    def mask_net(self, blob_conv, rpn_blob):
         """For inference"""
         if not self.training:
-            mask_feat = self.Mask_Head(blob_conv, mask_rois=mask_rois)
+            mask_feat = self.Mask_Head(blob_conv, rpn_blob)
             mask_pred = self.Mask_Outs(mask_feat)
             return mask_pred
         else:
@@ -279,10 +280,10 @@ class Generalized_RCNN(nn.Module):
                              'Set the network in inference mode by net.eval().')
 
 
-    def keypoint_net(self, blob_conv, keypoint_rois):
+    def keypoint_net(self, blob_conv, rpn_blob):
         """For inference"""
         if not self.training:
-            kps_feat = self.Keypoint_Head(blob_conv, keypoint_rois=keypoint_rois)
+            kps_feat = self.Keypoint_Head(blob_conv, rpn_blob)
             kps_pred = self.Keypoint_Outs(kps_feat)
             return kps_pred
         else:

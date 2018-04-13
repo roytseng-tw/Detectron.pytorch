@@ -152,10 +152,12 @@ class fpn(nn.Module):
         for key, value in conv_body_mapping.items():
             mapping_to_detectron['conv_body.'+key] = value
 
-        mapping_to_detectron['conv_top'] = 'fpn_inner_' + self.fpn_level_info.blobs[0]
+        d_prefix = 'fpn_inner_' + self.fpn_level_info.blobs[0]
+        mapping_to_detectron['conv_top.weight'] = d_prefix + '_w'
+        mapping_to_detectron['conv_top.bias'] = d_prefix + '_b'
         for i in range(self.num_backbone_stages - 1):
             p_prefix = 'topdown_lateral_modules.%d.conv_lateral' % i
-            d_prefix = 'fpn_inner_' + self.fpn_level_info.blobs[i+1]
+            d_prefix = 'fpn_inner_' + self.fpn_level_info.blobs[i+1] + '_lateral'
             mapping_to_detectron.update({
                 p_prefix + '.weight' : d_prefix + '_w',
                 p_prefix + '.bias': d_prefix + '_b'

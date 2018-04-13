@@ -42,6 +42,8 @@ from core.config import cfg
 from utils.timer import Timer
 import utils.boxes as box_utils
 import utils.blob as blob_utils
+import utils.fpn as fpn_utils
+import utils.keypoints as keypoint_utils
 
 
 def im_detect_all(model, im, box_proposals=None, timers=None):
@@ -83,8 +85,18 @@ def im_detect_all(model, im, box_proposals=None, timers=None):
     else:
         cls_segms = None
 
-    if cfg.MODEL.KEYPOINTS_ON:
-        pass
+    if cfg.MODEL.KEYPOINTS_ON and boxes.shape[0] > 0:
+        timers['im_detect_keypoints'].tic()
+        if cfg.TEST.KPS_AUG.ENABLED:
+            raise NotImplementedError
+            # heatmaps = im_detect_keypoints_aug(model, im, boxes)
+        else:
+            heatmaps = im_detect_keypoints(model, im_scale, boxes, blob_conv)
+        timers['im_detect_keypoints'].toc()
+
+        timers['misc_keypoints'].tic()
+        cls_keyps = keypoint_results(cls_boxes, heatmaps, boxes)
+        timers['misc_keypoints'].toc()
     else:
         cls_keyps = None
 
@@ -105,10 +117,14 @@ def im_detect_bbox(model, im, target_scale, target_max_size, boxes=None):
         inputs['rois'] = inputs['rois'][index, :]
         boxes = boxes[index, :]
 
-    im_data = Variable(torch.from_numpy(inputs['data']), volatile=True).cuda(0)  # forcely put on first cuda device
-    im_info = Variable(torch.from_numpy(inputs['im_info']), volatile=True)
+    # Add multi-level rois for FPN
+    if cfg.FPN.MULTILEVEL_ROIS and not cfg.MODEL.FASTER_RCNN:
+        _add_multilevel_rois_for_test(inputs, 'rois')
 
-    return_dict = model(im_data, im_info)
+    inputs['data'] = [Variable(torch.from_numpy(inputs['data']), volatile=True)]
+    inputs['im_info'] = [Variable(torch.from_numpy(inputs['im_info']), volatile=True)]
+
+    return_dict = model(**inputs)
 
     if cfg.MODEL.FASTER_RCNN:
         rois = return_dict['rois'].data.cpu().numpy()
@@ -170,9 +186,14 @@ def im_detect_mask(model, im_scale, boxes, blob_conv):
         pred_masks = np.zeros((0, M, M), np.float32)
         return pred_masks
 
-    mask_rois = Variable(torch.from_numpy(_get_rois_blob(boxes, im_scale))).cuda(0)
-    pred_masks = model.mask_net(blob_conv, mask_rois)
-    pred_masks = pred_masks.data.cpu().numpy()
+    inputs = {'mask_rois': _get_rois_blob(boxes, im_scale)}
+
+    # Add multi-level rois for FPN
+    if cfg.FPN.MULTILEVEL_ROIS:
+        _add_multilevel_rois_for_test(inputs, 'mask_rois')
+
+    pred_masks = model.module.mask_net(blob_conv, inputs)
+    pred_masks = pred_masks.data.cpu().numpy().squeeze()
 
     if cfg.MRCNN.CLS_SPECIFIC_MASK:
         pred_masks = pred_masks.reshape([-1, cfg.MODEL.NUM_CLASSES, M, M])
@@ -180,6 +201,44 @@ def im_detect_mask(model, im_scale, boxes, blob_conv):
         pred_masks = pred_masks.reshape([-1, 1, M, M])
 
     return pred_masks
+
+
+def im_detect_keypoints(model, im_scale, boxes, blob_conv):
+    """Infer instance keypoint poses. This function must be called after
+    im_detect_bbox as it assumes that the Caffe2 workspace is already populated
+    with the necessary blobs.
+
+    Arguments:
+        model (DetectionModelHelper): the detection model to use
+        im_scales (list): image blob scales as returned by im_detect_bbox
+        boxes (ndarray): R x 4 array of bounding box detections (e.g., as
+            returned by im_detect_bbox)
+
+    Returns:
+        pred_heatmaps (ndarray): R x J x M x M array of keypoint location
+            logits (softmax inputs) for each of the J keypoint types output
+            by the network (must be processed by keypoint_results to convert
+            into point predictions in the original image coordinate space)
+    """
+    M = cfg.KRCNN.HEATMAP_SIZE
+    if boxes.shape[0] == 0:
+        pred_heatmaps = np.zeros((0, cfg.KRCNN.NUM_KEYPOINTS, M, M), np.float32)
+        return pred_heatmaps
+
+    inputs = {'keypoint_rois': _get_rois_blob(boxes, im_scale)}
+
+    # Add multi-level rois for FPN
+    if cfg.FPN.MULTILEVEL_ROIS:
+        _add_multilevel_rois_for_test(inputs, 'keypoint_rois')
+
+    pred_heatmaps = model.module.keypoint_net(blob_conv, inputs)
+    pred_heatmaps = pred_heatmaps.data.cpu().numpy().squeeze()
+
+    # In case of 1
+    if pred_heatmaps.ndim == 3:
+        pred_heatmaps = np.expand_dims(pred_heatmaps, axis=0)
+
+    return pred_heatmaps
 
 
 def box_results_with_nms_and_limit(scores, boxes):  # NOTE: support single-batch
@@ -297,6 +356,25 @@ def segm_results(cls_boxes, masks, ref_boxes, im_h, im_w):
     return cls_segms
 
 
+def keypoint_results(cls_boxes, pred_heatmaps, ref_boxes):
+    num_classes = cfg.MODEL.NUM_CLASSES
+    cls_keyps = [[] for _ in range(num_classes)]
+    person_idx = keypoint_utils.get_person_class_index()
+    xy_preds = keypoint_utils.heatmaps_to_keypoints(pred_heatmaps, ref_boxes)
+
+    # NMS OKS
+    if cfg.KRCNN.NMS_OKS:
+        keep = keypoint_utils.nms_oks(xy_preds, ref_boxes, 0.3)
+        xy_preds = xy_preds[keep, :, :]
+        ref_boxes = ref_boxes[keep, :]
+        pred_heatmaps = pred_heatmaps[keep, :, :, :]
+        cls_boxes[person_idx] = cls_boxes[person_idx][keep, :]
+
+    kps = [xy_preds[i] for i in range(xy_preds.shape[0])]
+    cls_keyps[person_idx] = kps
+    return cls_keyps
+
+
 def _get_rois_blob(im_rois, im_scale):
     """Converts RoIs into network inputs.
 
@@ -327,6 +405,27 @@ def _project_im_rois(im_rois, scales):
     rois = im_rois.astype(np.float, copy=False) * scales
     levels = np.zeros((im_rois.shape[0], 1), dtype=np.int)
     return rois, levels
+
+
+def _add_multilevel_rois_for_test(blobs, name):
+    """Distributes a set of RoIs across FPN pyramid levels by creating new level
+    specific RoI blobs.
+
+    Arguments:
+        blobs (dict): dictionary of blobs
+        name (str): a key in 'blobs' identifying the source RoI blob
+
+    Returns:
+        [by ref] blobs (dict): new keys named by `name + 'fpn' + level`
+            are added to dict each with a value that's an R_level x 5 ndarray of
+            RoIs (see _get_rois_blob for format)
+    """
+    lvl_min = cfg.FPN.ROI_MIN_LEVEL
+    lvl_max = cfg.FPN.ROI_MAX_LEVEL
+    lvls = fpn_utils.map_rois_to_fpn_levels(blobs[name][:, 1:5], lvl_min, lvl_max)
+    fpn_utils.add_multilevel_roi_blobs(
+        blobs, name, blobs[name], lvls, lvl_min, lvl_max
+    )
 
 
 def _get_blobs(im, rois, target_scale, target_max_size):

@@ -23,15 +23,15 @@ import torch.nn as nn
 from torch.autograd import Variable
 
 import _init_paths
+import nn as mynn
 from core.config import cfg, cfg_from_file, cfg_from_list, assert_and_infer_cfg
 from core.test import im_detect_all
 from modeling.model_builder import Generalized_RCNN
+import datasets.dummy_datasets as datasets
+import utils.misc as misc_utils
+import utils.vis as vis_utils
 from utils.detectron_weight_helper import load_detectron_weight
 from utils.timer import Timer
-import datasets.dummy_datasets as datasets
-import utils.blob as blob_utils
-import utils.vis as vis_utils
-import utils.misc as misc_utils
 
 
 def parse_args():
@@ -86,6 +86,9 @@ def main():
     if args.dataset.startswith("coco"):
         dataset = datasets.get_coco_dataset()
         cfg.MODEL.NUM_CLASSES = len(dataset.classes)
+    elif args.dataset.startswith("keypoints_coco"):
+        dataset = datasets.get_coco_dataset()
+        cfg.MODEL.NUM_CLASSES = 2
     else:
         raise ValueError('Unexpected dataset name: {}'.format(args.dataset))
 
@@ -101,18 +104,21 @@ def main():
 
     maskRCNN = Generalized_RCNN()
 
+    if args.cuda:
+        maskRCNN.cuda()
+
     if args.load_ckpt:
         load_name = args.load_ckpt
         print("loading checkpoint %s" % (load_name))
         checkpoint = torch.load(load_name)
-        maskRCNN.load_state_dict(checkpoint['model'])
+        maskRCNN.load_state_dict(checkpoint['model'], strict=False)
 
     if args.load_detectron:
         print("loading detectron weights %s" % args.load_detectron)
         load_detectron_weight(maskRCNN, args.load_detectron)
 
-    if args.cuda:
-        maskRCNN.cuda()
+    maskRCNN = mynn.DataParallel(maskRCNN, cpu_keywords=['im_info', 'roidb'],
+                                 minibatch=True)
 
     maskRCNN.eval()
 

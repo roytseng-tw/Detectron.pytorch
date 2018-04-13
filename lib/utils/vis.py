@@ -200,15 +200,14 @@ def vis_one_image(
                 if kps[2, i1] > kp_thresh and kps[2, i2] > kp_thresh:
                     x = [kps[0, i1], kps[0, i2]]
                     y = [kps[1, i1], kps[1, i2]]
-                    line = plt.plot(x, y)
+                    line = ax.plot(x, y)
                     plt.setp(line, color=colors[l], linewidth=1.0, alpha=0.7)
                 if kps[2, i1] > kp_thresh:
-                    plt.plot(
+                    ax.plot(
                         kps[0, i1], kps[1, i1], '.', color=colors[l],
                         markersize=3.0, alpha=0.7)
-
                 if kps[2, i2] > kp_thresh:
-                    plt.plot(
+                    ax.plot(
                         kps[0, i2], kps[1, i2], '.', color=colors[l],
                         markersize=3.0, alpha=0.7)
 
@@ -229,13 +228,13 @@ def vis_one_image(
                     kps[2, dataset_keypoints.index('nose')] > kp_thresh):
                 x = [mid_shoulder[0], kps[0, dataset_keypoints.index('nose')]]
                 y = [mid_shoulder[1], kps[1, dataset_keypoints.index('nose')]]
-                line = plt.plot(x, y)
+                line = ax.plot(x, y)
                 plt.setp(
                     line, color=colors[len(kp_lines)], linewidth=1.0, alpha=0.7)
             if sc_mid_shoulder > kp_thresh and sc_mid_hip > kp_thresh:
                 x = [mid_shoulder[0], mid_hip[0]]
                 y = [mid_shoulder[1], mid_hip[1]]
-                line = plt.plot(x, y)
+                line = ax.plot(x, y)
                 plt.setp(
                     line, color=colors[len(kp_lines) + 1], linewidth=1.0,
                     alpha=0.7)
