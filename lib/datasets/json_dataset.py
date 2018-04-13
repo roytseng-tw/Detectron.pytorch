@@ -84,6 +84,13 @@ class JsonDataset(object):
         }
         self._init_keypoints()
 
+        # Set cfg.MODEL.NUM_CLASSES
+        if cfg.MODEL.NUM_CLASSES != -1:
+            assert cfg.MODEL.NUM_CLASSES == 2 if cfg.MODEL.KEYPOINTS_ON else self.num_classes, \
+                "number of classes should equal when using multiple datasets"
+        else:
+            cfg.MODEL.NUM_CLASSES = 2 if cfg.MODEL.KEYPOINTS_ON else self.num_classes
+
     @property
     def cache_path(self):
         cache_path = os.path.abspath(os.path.join(cfg.DATA_DIR, 'cache'))
@@ -358,17 +365,7 @@ class JsonDataset(object):
         # Thus far only the 'person' category has keypoints
         if 'person' in self.category_to_id_map:
             cat_info = self.COCO.loadCats([self.category_to_id_map['person']])
-            if cfg.MODEL.NUM_CLASSES != -1:
-                assert cfg.MODEL.NUM_CLASSES == 2, \
-                    "number of classes should equal when using multiple datasets"
-            else:
-                cfg.MODEL.NUM_CLASSES = 2
         else:
-            if cfg.MODEL.NUM_CLASSES != -1:
-                assert cfg.MODEL.NUM_CLASSES == self.num_classes, \
-                    "number of classes should equal when using multiple datasets"
-            else:
-                cfg.MODEL.NUM_CLASSES = self.num_classes
             return
 
         # Check if the annotations contain keypoint data or not
