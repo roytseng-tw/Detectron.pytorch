@@ -71,7 +71,15 @@ def im_list_to_blob(ims):
     Output is a 4D HCHW tensor of the images concatenated along axis 0 with
     shape.
     """
+    if not isinstance(ims, list):
+        ims = [ims]
     max_shape = np.array([im.shape for im in ims]).max(axis=0)
+    # Pad the image so they can be divisible by a stride
+    if cfg.FPN.FPN_ON:
+        stride = float(cfg.FPN.COARSEST_STRIDE)
+        max_shape[0] = int(np.ceil(max_shape[0] / stride) * stride)
+        max_shape[1] = int(np.ceil(max_shape[1] / stride) * stride)
+
     num_images = len(ims)
     blob = np.zeros(
         (num_images, max_shape[0], max_shape[1], 3), dtype=np.float32)

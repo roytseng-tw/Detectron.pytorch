@@ -234,7 +234,8 @@ class topdown_lateral_module(nn.Module):
         # Lateral 1x1 conv
         lat = self.conv_lateral(lateral_blob)
         # Top-down 2x upsampling
-        td = F.upsample_bilinear(top_blob, size=lat.size()[2:])
+        # td = F.upsample(top_blob, size=lat.size()[2:], mode='bilinear')
+        td = F.upsample(top_blob, scale_factor=2, mode='nearest')
         # Sum lateral and top-down
         return lat + td
 

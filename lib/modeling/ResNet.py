@@ -49,6 +49,7 @@ class ResNet_convX_body(nn.Module):
             OrderedDict([('conv1', nn.Conv2d(3, 64, 7, stride=2, padding=3, bias=False)),
                          ('bn1', mynn.AffineChannel2d(64)),
                          ('relu', nn.ReLU(inplace=True)),
+                         # ('maxpool', nn.MaxPool2d(kernel_size=3, stride=2, padding=0, ceil_mode=True))]))
                          ('maxpool', nn.MaxPool2d(kernel_size=3, stride=2, padding=1))]))
         dim_in = 64
         dim_bottleneck = cfg.RESNETS.NUM_GROUPS * cfg.RESNETS.WIDTH_PER_GROUP
