@@ -31,19 +31,20 @@ class _AffineGridGen(Module):
 
         #       return self.f(input), loss.view(-1,1)
 
-class CylinderGridGen(Module):
-    def __init__(self, height, width, lr = 1, aux_loss = False):
-        super(CylinderGridGen, self).__init__()
-        self.height, self.width = height, width
-        self.aux_loss = aux_loss
-        self.f = CylinderGridGenFunction(self.height, self.width, lr=lr)
-        self.lr = lr
-    def forward(self, input):
 
-        if not self.aux_loss:
-            return self.f(input)
-        else:
-            return self.f(input), torch.mul(input, input).view(-1,1)
+# class CylinderGridGen(Module):
+#     def __init__(self, height, width, lr = 1, aux_loss = False):
+#         super(CylinderGridGen, self).__init__()
+#         self.height, self.width = height, width
+#         self.aux_loss = aux_loss
+#         self.f = CylinderGridGenFunction(self.height, self.width, lr=lr)
+#         self.lr = lr
+#     def forward(self, input):
+
+#         if not self.aux_loss:
+#             return self.f(input)
+#         else:
+#             return self.f(input), torch.mul(input, input).view(-1,1)
 
 
 class AffineGridGenV2(Module):
