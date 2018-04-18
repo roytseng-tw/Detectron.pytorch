@@ -45,6 +45,7 @@ from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
 
+import warnings
 import numpy as np
 
 from core.config import cfg
@@ -62,7 +63,7 @@ def boxes_area(boxes):
 
     neg_area_idx = np.where(areas < 0)[0]
     if neg_area_idx.size:
-        raise RuntimeWarning("Negative areas founds: %d" % neg_area_idx.size)
+        warnings.warn("Negative areas founds: %d" % neg_area_idx.size, RuntimeWarning)
     #TODO proper warm up and learning rate may reduce the prob of assertion fail
     # assert np.all(areas >= 0), 'Negative areas founds'
     return areas, neg_area_idx
