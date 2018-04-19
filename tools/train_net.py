@@ -375,7 +375,7 @@ def main():
                             loss_rcnn_keypoints = loss_rcnn_keypoints.data[0]
                             print("%srcnn_keypoints %.4f" % (print_prefix, loss_rcnn_keypoints))
 
-                        if args.use_tfboard:
+                        if args.use_tfboard and not args.no_save:
                             info = {
                                 'loss': loss_avg,
                                 'loss_rpn_cls': loss_rpn_cls,
@@ -409,7 +409,7 @@ def main():
 
     finally:
         # ---- Training ends ----
-        if args.use_tfboard:
+        if args.use_tfboard and not args.no_save:
             tblogger.close()
 
 
