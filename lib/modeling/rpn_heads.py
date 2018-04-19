@@ -106,7 +106,7 @@ class single_scale_rpn_outputs(nn.Module):
                 rpn_cls_prob = F.softmax(
                     rpn_cls_logits.view(B, 2, C / 2, H, W), dim=1).view(
                         B, C, H, W)
-                rpn_cls_prob = rpn_bbox_pred[:, 1].view(B, C / 2, H, W)
+                rpn_cls_prob = rpn_cls_prob[:, 1].view(B, C / 2, H, W)
             else:
                 rpn_cls_prob = F.sigmoid(rpn_cls_logits)
 
