@@ -38,7 +38,7 @@ def get_imagelist_from_dir(dirpath):
     images = []
     for f in os.listdir(dirpath):
         if is_image_file(f):
-            images.append(f)
+            images.append(os.path.join(dirpath, f))
     return images
 
 
