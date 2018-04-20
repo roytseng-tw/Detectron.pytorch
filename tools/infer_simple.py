@@ -136,6 +136,7 @@ def main():
     for i in xrange(num_images):
         print('img', i)
         im = cv2.imread(imglist[i])
+        assert im is not None
 
         timers = defaultdict(Timer)
 
