@@ -84,12 +84,12 @@ class JsonDataset(object):
         }
         self._init_keypoints()
 
-        # Set cfg.MODEL.NUM_CLASSES
-        if cfg.MODEL.NUM_CLASSES != -1:
-            assert cfg.MODEL.NUM_CLASSES == 2 if cfg.MODEL.KEYPOINTS_ON else self.num_classes, \
-                "number of classes should equal when using multiple datasets"
-        else:
-            cfg.MODEL.NUM_CLASSES = 2 if cfg.MODEL.KEYPOINTS_ON else self.num_classes
+        # # Set cfg.MODEL.NUM_CLASSES
+        # if cfg.MODEL.NUM_CLASSES != -1:
+        #     assert cfg.MODEL.NUM_CLASSES == 2 if cfg.MODEL.KEYPOINTS_ON else self.num_classes, \
+        #         "number of classes should equal when using multiple datasets"
+        # else:
+        #     cfg.MODEL.NUM_CLASSES = 2 if cfg.MODEL.KEYPOINTS_ON else self.num_classes
 
     @property
     def cache_path(self):

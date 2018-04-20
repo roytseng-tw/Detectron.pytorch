@@ -29,7 +29,7 @@ _CMAKE_INSTALL_PREFIX = '/usr/local'
 
 def get_runtime_dir():
     """Retrieve the path to the runtime directory."""
-    return sys.path[0]
+    return os.getcwd()
 
 
 def get_py_bin_ext():
@@ -47,37 +47,3 @@ def set_up_matplotlib():
 def exit_on_error():
     """Exit from a detectron tool when there's an error."""
     sys.exit(1)
-
-
-def import_nccl_ops():
-    """Import NCCL ops."""
-    # There is no need to load NCCL ops since the
-    # NCCL dependency is built into the Caffe2 gpu lib
-    pass
-
-
-def get_detectron_ops_lib():
-    """Retrieve Detectron ops library."""
-    # Candidate prefixes for the detectron ops lib path
-    prefixes = [_CMAKE_INSTALL_PREFIX, sys.prefix, sys.exec_prefix] + sys.path
-    # Search for detectron ops lib
-    for prefix in prefixes:
-        ops_path = os.path.join(prefix, 'lib/libcaffe2_detectron_ops_gpu.so')
-        if os.path.exists(ops_path):
-            # TODO(ilijar): Switch to using a logger
-            print('Found Detectron ops lib: {}'.format(ops_path))
-            break
-    assert os.path.exists(ops_path), \
-        ('Detectron ops lib not found; make sure that your Caffe2 '
-         'version includes Detectron module')
-    return ops_path
-
-
-def get_custom_ops_lib():
-    """Retrieve custom ops library."""
-    lib_dir, _utils = os.path.split(os.path.dirname(__file__))
-    custom_ops_lib = os.path.join(
-        lib_dir, 'build/libcaffe2_detectron_custom_ops_gpu.so')
-    assert os.path.exists(custom_ops_lib), \
-        'Custom ops lib not found at \'{}\''.format(custom_ops_lib)
-    return custom_ops_lib

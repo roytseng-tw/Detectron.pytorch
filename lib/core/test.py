@@ -346,6 +346,9 @@ def segm_results(cls_boxes, masks, ref_boxes, im_h, im_w):
 
             # Get RLE encoding used by the COCO evaluation API
             rle = mask_util.encode(np.array(im_mask[:, :, np.newaxis], order='F'))[0]
+            # For dumping to json, need to decode the byte string.
+            # https://github.com/cocodataset/cocoapi/issues/70
+            rle['counts'] = rle['counts'].decode('ascii')
             segms.append(rle)
 
             mask_ind += 1
