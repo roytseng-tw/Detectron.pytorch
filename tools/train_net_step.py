@@ -120,7 +120,7 @@ def save_ckpt(output_dir, args, step, train_size, model, optimizer):
     if not os.path.exists(ckpt_dir):
         os.makedirs(ckpt_dir)
     save_name = os.path.join(ckpt_dir, 'model_step{}.pth'.format(step))
-    if args.mGPUs:
+    if isinstance(model, mynn.DataParallel):
         model = model.module
     model_state_dict = model.state_dict()
     torch.save({
