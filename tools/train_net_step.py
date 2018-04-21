@@ -420,6 +420,9 @@ def main():
                 loss_avg = 0
                 timers['train_loop'].tic()
 
+        # Save last checkpoint
+        save_ckpt(output_dir, args, step, train_size, maskRCNN, optimizer)
+
     except (RuntimeError, KeyboardInterrupt) as e:
         print('Save on exception:', e)
         save_ckpt(output_dir, args, step, train_size, maskRCNN, optimizer)
