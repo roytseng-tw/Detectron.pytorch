@@ -71,7 +71,7 @@ if __name__ == '__main__':
     assert bool(args.load_ckpt) ^ bool(args.load_detectron), \
         'Exactly one of --load_ckpt and --load_detectron should be specified.'
     if args.output_dir is None:
-        ckpt_path = args.load_ckpt if args.load_ckpt else args.detectron
+        ckpt_path = args.load_ckpt if args.load_ckpt else args.load_detectron
         args.output_dir = os.path.join(
             os.path.dirname(os.path.dirname(ckpt_path)), 'test')
         logger.info('Automatically set output directory to %s', args.output_dir)
