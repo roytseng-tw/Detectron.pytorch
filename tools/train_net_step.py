@@ -301,6 +301,7 @@ def main():
     for i in range(1, len(cfg.SOLVER.STEPS)):
         if cfg.SOLVER.STEPS[i] > args.start_step:
             decay_steps_ind = i
+            break
     if decay_steps_ind is None:
         decay_steps_ind = len(cfg.SOLVER.STEPS)
 
