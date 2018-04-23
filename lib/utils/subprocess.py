@@ -68,7 +68,8 @@ def process_in_parallel(
         start = subinds[i][0]
         end = subinds[i][-1] + 1
         subprocess_env['CUDA_VISIBLE_DEVICES'] = str(gpu_ind)
-        cmd = 'python {binary} --range {start} {end} --cfg {cfg_file} --set {opts}'
+        cmd = ('python {binary} --range {start} {end} --cfg {cfg_file} --set {opts} '
+               '--output_dir {output_dir}')
         if load_ckpt is not None:
             cmd += ' --load_ckpt {load_ckpt}'
         elif load_detectron is not None:
@@ -78,6 +79,7 @@ def process_in_parallel(
             start=int(start),
             end=int(end),
             cfg_file=shlex_quote(cfg_file),
+            output_dir=output_dir,
             load_ckpt=load_ckpt,
             load_detectron=load_detectron,
             opts=' '.join([shlex_quote(opt) for opt in opts])
@@ -102,9 +104,9 @@ def process_in_parallel(
     # Log output from inference processes and collate their results
     outputs = []
     for i, p, start, end, subprocess_stdout in processes:
-        log_subprocess_output(i, p, output_dir, tag, start, end)
-        if isinstance(subprocess_stdout, IOBase):
-            subprocess_stdout.close()
+        # log_subprocess_output(i, p, output_dir, tag, start, end)
+        # if isinstance(subprocess_stdout, IOBase):
+        #     subprocess_stdout.close()
         range_file = os.path.join(
             output_dir, '%s_range_%s_%s.pkl' % (tag, start, end)
         )
@@ -131,8 +133,8 @@ def log_subprocess_output(i, p, output_dir, tag, start, end):
         # Stream the piped stdout from the first subprocess in realtime
         with open(outfile, 'w') as f:
             for line in iter(p.stdout.readline, b''):
-                print(line.rstrip())
-                f.write(str(line))
+                print(line.rstrip().decode('ascii'))
+                f.write(str(line, encoding='ascii'))
         p.stdout.close()
         ret = p.wait()
     else:
