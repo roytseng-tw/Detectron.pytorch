@@ -299,7 +299,7 @@ def main():
     # Set index for decay steps
     decay_steps_ind = None
     for i in range(1, len(cfg.SOLVER.STEPS)):
-        if cfg.SOLVER.STEPS[i] > args.start_step:
+        if cfg.SOLVER.STEPS[i] >= args.start_step:
             decay_steps_ind = i
             break
     if decay_steps_ind is None:
