@@ -104,9 +104,9 @@ def process_in_parallel(
     # Log output from inference processes and collate their results
     outputs = []
     for i, p, start, end, subprocess_stdout in processes:
-        # log_subprocess_output(i, p, output_dir, tag, start, end)
-        # if isinstance(subprocess_stdout, IOBase):
-        #     subprocess_stdout.close()
+        log_subprocess_output(i, p, output_dir, tag, start, end)
+        if isinstance(subprocess_stdout, IOBase):
+            subprocess_stdout.close()
         range_file = os.path.join(
             output_dir, '%s_range_%s_%s.pkl' % (tag, start, end)
         )
