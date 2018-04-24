@@ -39,7 +39,7 @@ class mask_rcnn_outputs(nn.Module):
                 cfg.MRCNN.CONV_INIT=='MSRAFill':
             # Use GaussianFill for class-agnostic mask prediction; fills based on
             # fan-in can be too large in this case and cause divergence
-            weight_init_func = init.kaiming_normal
+            weight_init_func = partial(init.kaiming_normal, mode='fan_out')
         else:
             weight_init_func = partial(init.normal, std=0.001)
         weight_init_func(self.classify.weight)
@@ -147,7 +147,7 @@ class mask_rcnn_fcn_head_v1upXconvs(nn.Module):
             if cfg.MRCNN.CONV_INIT == 'GaussianFill':
                 init.normal(m.weight, std=0.001)
             elif cfg.MRCNN.CONV_INIT == 'MSRAFill':
-                init.kaiming_normal(m.weight)
+                init.kaiming_normal(m.weight, mode='fan_out')
             else:
                 raise ValueError
             init.constant(m.bias, 0)
@@ -205,7 +205,7 @@ class mask_rcnn_fcn_head_v0upshare(nn.Module):
         if cfg.MRCNN.CONV_INIT == 'GaussianFill':
             init.normal(self.upconv5.weight, std=0.001)
         elif cfg.MRCNN.CONV_INIT == 'MSRAFill':
-            init.kaiming_normal(self.upconv5.weight)
+            init.kaiming_normal(self.upconv5.weight, mode='fan_out')
         init.constant(self.upconv5.bias, 0)
 
     def share_res5_module(self, res5_target):
@@ -269,7 +269,7 @@ class mask_rcnn_fcn_head_v0up(nn.Module):
         if cfg.MRCNN.CONV_INIT == 'GaussianFill':
             init.normal(self.upconv5.weight, std=0.001)
         elif cfg.MRCNN.CONV_INIT == 'MSRAFill':
-            init.kaiming_normal(self.upconv5.weight)
+            init.kaiming_normal(self.upconv5.weight, mode='fan_out')
         init.constant(self.upconv5.bias, 0)
 
     def detectron_weight_mapping(self):

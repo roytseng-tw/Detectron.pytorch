@@ -51,7 +51,7 @@ class keypoint_outputs(nn.Module):
         if cfg.KRCNN.CONV_INIT == 'GaussianFill':
             init.normal(self.classify.weight, std=0.001)
         elif cfg.KRCNN.CONV_INIT == 'MSRAFill':
-            init.kaiming_normal(self.classify.weight)
+            init.kaiming_normal(self.classify.weight, mode='fan_out')
         else:
             raise ValueError(cfg.KRCNN.CONV_INIT)
         init.constant(self.classify.bias, 0)
@@ -151,7 +151,7 @@ class roi_pose_head_v1convX(nn.Module):
             if cfg.KRCNN.CONV_INIT == 'GaussianFill':
                 init.normal(m.weight, std=0.01)
             elif cfg.KRCNN.CONV_INIT == 'MSRAFill':
-                init.kaiming_normal(m.weight)
+                init.kaiming_normal(m.weight, mode='fan_out')
             else:
                 ValueError('Unexpected cfg.KRCNN.CONV_INIT: {}'.format(cfg.KRCNN.CONV_INIT))
             init.constant(m.bias, 0)
