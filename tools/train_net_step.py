@@ -257,7 +257,8 @@ def main():
         net_utils.load_ckpt(maskRCNN, checkpoint['model'])
         if args.resume:
             args.start_step = checkpoint['step'] + 1
-            assert checkpoint['train_size'] == train_size
+            if 'train_size' in checkpoint:  # For backward compatibility
+                assert checkpoint['train_size'] == train_size
             # There is a bug in optimizer.load_state_dict on Pytorch 0.3.1.
             # However it's fixed on master.
             # optimizer.load_state_dict(checkpoint['optimizer'])
@@ -307,6 +308,7 @@ def main():
 
     logger.info('Training starts !')
     loss_avg = 0
+    prev_disp_step = args.start_step - 1
     try:
         timers['train_loop'].tic()
         for step in range(args.start_step, cfg.SOLVER.MAX_ITER):
@@ -380,11 +382,11 @@ def main():
             if (step+1) % CHECKPOINT_PERIOD == 0:
                 save_ckpt(output_dir, args, step, train_size, maskRCNN, optimizer)
 
-            if ((step % args.disp_interval == 0 and
-                 (step - args.start_step >= args.disp_interval)) or
-                    step == cfg.SOLVER.MAX_ITER - 1):
+            if step % args.disp_interval == 0 or step == (cfg.SOLVER.MAX_ITER - 1)== 0:
+                n_steps = step - prev_disp_step
+                loss_avg /= n_steps
+                prev_disp_step = step
                 diff = timers['train_loop'].toc(average=False)
-                loss_avg /= args.disp_interval
 
                 loss_rpn_cls = loss_rpn_cls.data[0]
                 loss_rpn_bbox = loss_rpn_bbox.data[0]
@@ -394,7 +396,7 @@ def main():
                 bg_cnt = rois_label.data.numel() - fg_cnt
                 print("[ %s ][ step %d ]" % (run_name, step))
                 print("\t\tloss: %.4f, lr: %.6f" % (loss_avg, lr))
-                print("\t\tfg/bg=(%d/%d), time cost: %f" % (fg_cnt, bg_cnt, diff))
+                print("\t\tfg/bg=(%d/%d), time cost (per step): %f " % (fg_cnt, bg_cnt, diff / n_steps))
                 print("\t\trpn_cls: %.4f, rpn_bbox: %.4f, rcnn_cls: %.4f, rcnn_bbox %.4f"
                     % (loss_rpn_cls, loss_rpn_bbox, loss_rcnn_cls, loss_rcnn_bbox))
 
