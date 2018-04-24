@@ -35,7 +35,8 @@ class mask_rcnn_outputs(nn.Module):
         self._init_weights()
 
     def _init_weights(self):
-        if not cfg.MRCNN.USE_FC_OUTPUT and cfg.MRCNN.CLS_SPECIFIC_MASK:
+        if not cfg.MRCNN.USE_FC_OUTPUT and cfg.MRCNN.CLS_SPECIFIC_MASK and \
+                cfg.MRCNN.CONV_INIT=='MSRAFill':
             # Use GaussianFill for class-agnostic mask prediction; fills based on
             # fan-in can be too large in this case and cause divergence
             weight_init_func = init.kaiming_normal
@@ -130,9 +131,10 @@ class mask_rcnn_fcn_head_v1upXconvs(nn.Module):
         module_list = []
         for i in range(num_convs):
             module_list.extend([
-                nn.Conv2d(dim_in, dim_inner, 3, 1, padding=1*dilation),
+                nn.Conv2d(dim_in, dim_inner, 3, 1, padding=1*dilation, dilation=dilation),
                 nn.ReLU(inplace=True)
             ])
+            dim_in = dim_inner
         self.conv_fcn = nn.Sequential(*module_list)
 
         # upsample layer
