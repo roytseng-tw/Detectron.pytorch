@@ -257,13 +257,13 @@ python tools/infer_simple.py --dataset coco --cfg cfgs/e2e_mask_rcnn_R-50-C4.yml
 
     | AP            | AP50   | AP75   | APs    | APm    | APl    |
     |---------------|--------|--------|--------|--------|--------|
-    | 0.5201 (53.6) | 0.8169 | 0.5638 | 0.3494 | 0.5995 | 0.6812 |
+    | 0.5201 (0.536)| 0.8169 | 0.5638 | 0.3494 | 0.5995 | 0.6812 |
     
     Task: keypoint
     
-    | AP           | AP50   | AP75   | APm    | APl    |
-    |--------------|--------|--------|--------|--------|
-    | 0.6204 (64.2)| 0.8523 | 0.6730 |0.5700  | 0.7028 |
+    | AP            | AP50   | AP75   | APm    | APl    |
+    |---------------|--------|--------|--------|--------|
+    | 0.6204 (0.642)| 0.8523 | 0.6730 |0.5700  | 0.7028 |
     
   - The values in parentheses are **AP** of Detectron's `e2e_keypoint_rcnn_R-50-FPN_1x`, which is trained for 90000 iterations with batch size 16, and decay the lr by 0.1 after 60000th and 80000th iteration.
 
