@@ -310,6 +310,7 @@ def main():
     try:
         timers['train_loop'].tic()
         for step in range(args.start_step, cfg.SOLVER.MAX_ITER):
+            loss = 0
 
             # Warm up
             if step < cfg.SOLVER.WARM_UP_ITERS:
@@ -323,9 +324,12 @@ def main():
                     raise KeyError('Unknown SOLVER.WARM_UP_METHOD: {}'.format(method))
                 lr_new = cfg.SOLVER.BASE_LR * warmup_factor
                 net_utils.update_learning_rate(optimizer, lr, lr_new)
-                lr = lr_new
+                lr = optimizer.param_groups[0]['lr']
+                assert lr == lr_new
             elif step == cfg.SOLVER.WARM_UP_ITERS:
-                lr = cfg.SOLVER.BASE_LR
+                net_utils.update_learning_rate(optimizer, lr, cfg.SOLVER.BASE_LR)
+                lr = optimizer.param_groups[0]['lr']
+                assert lr == cfg.SOLVER.BASE_LR
 
             # Learning rate decay
             if decay_steps_ind < len(cfg.SOLVER.STEPS) and \
@@ -333,7 +337,8 @@ def main():
                 logger.info('Decay the learning on step %d', step)
                 lr_new = lr * cfg.SOLVER.GAMMA
                 net_utils.update_learning_rate(optimizer, lr, lr_new)
-                lr = lr_new
+                lr = optimizer.param_groups[0]['lr']
+                assert lr == lr_new
                 decay_steps_ind += 1
 
             try:
@@ -388,7 +393,7 @@ def main():
                 fg_cnt = torch.sum(rois_label.data.ne(0))
                 bg_cnt = rois_label.data.numel() - fg_cnt
                 print("[ %s ][ step %d ]" % (run_name, step))
-                print("\t\tloss: %.4f, lr: %.2e" % (loss_avg, lr))
+                print("\t\tloss: %.4f, lr: %.6f" % (loss_avg, lr))
                 print("\t\tfg/bg=(%d/%d), time cost: %f" % (fg_cnt, bg_cnt, diff))
                 print("\t\trpn_cls: %.4f, rpn_bbox: %.4f, rcnn_cls: %.4f, rcnn_bbox %.4f"
                     % (loss_rpn_cls, loss_rpn_bbox, loss_rcnn_cls, loss_rcnn_bbox))
