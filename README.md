@@ -250,7 +250,7 @@ python tools/infer_simple.py --dataset coco --cfg cfgs/e2e_mask_rcnn_R-50-C4.yml
 ### keypoint_rcnn
 - e2e_keypoint_rcnn_R-50-FPN
   - Training command: `python tools/train_net.py --dataset keypoints_coco2017 --cfg configs/e2e_keypoint_rcnn_R-50-FPN.yaml --bs 8`  
-    Trained for 6 epochs with batch size 8, and decay the lr by 0.1 on the start of 5th and 6th epoch. There are `floor(113198 / 8) = 14149` iterations per epoch.
+    Trained for 6 epochs with batch size 8, and decay the lr by 0.1 on the start of 5th and 6th epoch. There are floor(113198 / 8) = 14149 iterations per epoch.
   
     Dataset: keypoints_coco_2017_val  
     Task: box
