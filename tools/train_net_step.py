@@ -4,6 +4,7 @@ import argparse
 import os
 import sys
 import pickle
+import resource
 import traceback
 import logging
 from collections import defaultdict
@@ -29,10 +30,13 @@ from utils.logging import setup_logging
 from utils.timer import Timer
 from utils.training_stats import TrainingStats
 
- # Set up logging and load config options
+# Set up logging and load config options
 logger = setup_logging(__name__)
 logging.getLogger('roi_data.loader').setLevel(logging.INFO)
 
+# RuntimeError: received 0 items of ancdata. Issue: pytorch/pytorch#973
+rlimit = resource.getrlimit(resource.RLIMIT_NOFILE)
+resource.setrlimit(resource.RLIMIT_NOFILE, (4096, rlimit[1]))
 
 def parse_args():
     """Parse input arguments"""

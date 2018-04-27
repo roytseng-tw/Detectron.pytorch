@@ -37,6 +37,10 @@ cv2.ocl.setUseOpenCL(False)
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# RuntimeError: received 0 items of ancdata. Issue: pytorch/pytorch#973
+rlimit = resource.getrlimit(resource.RLIMIT_NOFILE)
+resource.setrlimit(resource.RLIMIT_NOFILE, (4096, rlimit[1]))
+
 
 def parse_args():
     """Parse input arguments"""
