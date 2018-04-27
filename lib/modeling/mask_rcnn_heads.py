@@ -263,6 +263,10 @@ class mask_rcnn_fcn_head_v0up(nn.Module):
         self.res5, dim_out = ResNet_roi_conv5_head_for_masks(dim_in)
         self.upconv5 = nn.ConvTranspose2d(dim_out, self.dim_out, 2, 2, 0)
 
+        # Freeze all bn (affine) layers in resnet!!!
+        self.res5.apply(
+            lambda m: ResNet.freeze_params(m)
+            if isinstance(m, mynn.AffineChannel2d) else None)
         self._init_weights()
 
     def _init_weights(self):

@@ -77,6 +77,9 @@ class ResNet_convX_body(nn.Module):
         for i in range(1, cfg.RESNETS.FREEZE_AT + 1):
             freeze_params(getattr(self, 'res%d' % i))
 
+        # Freeze all bn (affine) layers !!!
+        self.apply(lambda m: freeze_params(m) if isinstance(m, mynn.AffineChannel2d) else None)
+
     def detectron_weight_mapping(self):
         mapping_to_detectron = {
             'res1.conv1.weight': 'conv1_w',
@@ -119,6 +122,12 @@ class ResNet_roi_conv5_head(nn.Module):
         self.res5, self.dim_out = add_stage(dim_in, dim_bottleneck * 8, 3, stride_init)
         assert self.dim_out == 2048
         self.avgpool = nn.AvgPool2d(7)
+
+        self._init_modules()
+
+    def _init_modules(self):
+        # Freeze all bn (affine) layers !!!
+        self.apply(lambda m: freeze_params(m) if isinstance(m, mynn.AffineChannel2d) else None)
 
     def detectron_weight_mapping(self):
         mapping_to_detectron, orphan_in_detectron = \
