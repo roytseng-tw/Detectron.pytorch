@@ -28,13 +28,40 @@ import numpy as np
 import smtplib
 import sys
 
+from core.config import cfg
+
 # Print lower precision floating point values than default FLOAT_REPR
+# Note! Has no use for json encode with C speedups
 json.encoder.FLOAT_REPR = lambda o: format(o, '.6f')
 
 
 def log_json_stats(stats, sort_keys=True):
     print('json_stats: {:s}'.format(json.dumps(stats, sort_keys=sort_keys)))
 
+
+def log_stats(stats, misc_args):
+    """Log training statistics to terminal"""
+    if hasattr(misc_args, 'epoch'):
+        lines = "[%s][%s][Epoch %d][Iter %d / %d]\n" % (
+            misc_args.run_name, misc_args.cfg_filename,
+            misc_args.epoch, misc_args.step, misc_args.iters_per_epoch)
+    else:
+        lines = "[%s][%s][Step %d / %d]\n" % (
+            misc_args.run_name, misc_args.cfg_filename, stats['iter'], cfg.SOLVER.MAX_ITER)
+
+    lines += "\t\tloss: %.6f, lr: %.6f time: %.6f, eta: %s\n" % (
+        stats['loss'], stats['lr'], stats['time'], stats['eta']
+    )
+    if stats['metrics']:
+        lines += "\t\t" + ", ".join("%s: %.6f" % (k, v) for k, v in stats['metrics'].items()) + "\n"
+    if stats['head_losses']:
+        lines += "\t\t" + ", ".join("%s: %.6f" % (k, v) for k, v in stats['head_losses'].items()) + "\n"
+    if cfg.RPN.RPN_ON:
+        lines += "\t\t" + ", ".join("%s: %.6f" % (k, v) for k, v in stats['rpn_losses'].items()) + "\n"
+    if cfg.FPN.FPN_ON:
+        lines += "\t\t" + ", ".join("%s: %.6f" % (k, v) for k, v in stats['rpn_fpn_cls_losses'].items()) + "\n"
+        lines += "\t\t" + ", ".join("%s: %.6f" % (k, v) for k, v in stats['rpn_fpn_bbox_losses'].items()) + "\n"
+    print(lines[:-1])  # remove last new line
 
 class SmoothedValue(object):
     """Track a series of values and provide access to smoothed values over a

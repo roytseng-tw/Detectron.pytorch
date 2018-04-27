@@ -131,21 +131,22 @@ def affine_grid_gen(rois, input_size, grid_size):
     return grid
 
 
-def save_ckpt(output_dir, args, epoch, step, model, optimizer, iters_per_epoch):
+def save_ckpt(output_dir, args, model, optimizer):
     """Save checkpoint"""
     if args.no_save:
         return
     ckpt_dir = os.path.join(output_dir, 'ckpt')
     if not os.path.exists(ckpt_dir):
         os.makedirs(ckpt_dir)
-    save_name = os.path.join(ckpt_dir, 'model_{}_{}.pth'.format(epoch, step))
+    save_name = os.path.join(ckpt_dir, 'model_{}_{}.pth'.format(args.epoch, args.step))
     if args.mGPUs:
         model = model.module
-    model_state_dict = model.state_dict()
+    # TODO: (maybe) Do not save redundant shared params
+    # model_state_dict = model.state_dict()
     torch.save({
-        'epoch': epoch,
-        'step': step,
-        'iters_per_epoch': iters_per_epoch,
+        'epoch': args.epoch,
+        'step': args.step,
+        'iters_per_epoch': args.iters_per_epoch,
         'model': model.state_dict(),
         'optimizer': optimizer.state_dict()}, save_name)
     logger.info('save model: %s', save_name)

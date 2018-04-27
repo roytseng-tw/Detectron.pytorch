@@ -23,10 +23,12 @@ import utils.net as net_utils
 import utils.misc as misc_utils
 from core.config import cfg, cfg_from_file, cfg_from_list, assert_and_infer_cfg
 from datasets.roidb import combined_roidb_for_training
-from roi_data.loader import RoiDataLoader, MinibatchSampler, collate_minibatch
 from modeling.model_builder import Generalized_RCNN
+from roi_data.loader import RoiDataLoader, MinibatchSampler, collate_minibatch
 from utils.detectron_weight_helper import load_detectron_weight
+from utils.logging import log_stats
 from utils.timer import Timer
+from utils.training_stats import TrainingStats
 
 # OpenCL may be enabled by default in OpenCV3; disable it because it's not
 # thread safe and causes unwanted GPU memory allocations.
@@ -284,8 +286,9 @@ def main():
                                  minibatch=True)
 
     ### Training Setups ###
-    run_name = misc_utils.get_run_name()
-    output_dir = misc_utils.get_output_dir(args, run_name)
+    args.run_name = misc_utils.get_run_name()
+    output_dir = misc_utils.get_output_dir(args, args.run_name)
+    args.cfg_filename = os.path.basename(args.cfg_file)
 
     if not args.no_save:
         if not os.path.exists(output_dir):
@@ -303,120 +306,79 @@ def main():
     ### Training Loop ###
     maskRCNN.train()
 
+    training_stats = TrainingStats(
+        args,
+        args.disp_interval,
+        tblogger if args.use_tfboard and not args.no_save else None)
+
     iters_per_epoch = int(train_size / args.batch_size)  # drop last
+    args.iters_per_epoch = iters_per_epoch
     ckpt_interval_per_epoch = iters_per_epoch // args.ckpt_num_per_epoch
-    step = 0
     try:
         logger.info('Training starts !')
-        for epoch in range(args.start_epoch, args.start_epoch + args.num_epochs):
+        args.step = args.start_iter
+        global_step = iters_per_epoch * args.start_epoch + args.step
+        for args.epoch in range(args.start_epoch, args.start_epoch + args.num_epochs):
             # ---- Start of epoch ----
-            loss_avg = 0
-            timers['train_loop'].tic()
 
             # adjust learning rate
-            if args.lr_decay_epochs and epoch == args.lr_decay_epochs[0] and args.start_iter == 0:
+            if args.lr_decay_epochs and args.epoch == args.lr_decay_epochs[0] and args.start_iter == 0:
                 args.lr_decay_epochs.pop(0)
                 net_utils.decay_learning_rate(optimizer, lr, cfg.SOLVER.GAMMA)
                 lr *= cfg.SOLVER.GAMMA
 
-            for step, input_data in zip(range(args.start_iter, iters_per_epoch), dataloader):
+            for args.step, input_data in zip(range(args.start_iter, iters_per_epoch), dataloader):
 
                 for key in input_data:
                     if key != 'roidb': # roidb is a list of ndarrays with inconsistent length
                         input_data[key] = list(map(Variable, input_data[key]))
 
-                outputs = maskRCNN(**input_data)
+                training_stats.IterTic()
+                net_outputs = maskRCNN(**input_data)
+                training_stats.IterToc()
 
-                rois_label = outputs['rois_label']
-                cls_score = outputs['cls_score']
-                bbox_pred = outputs['bbox_pred']
-                loss_rpn_cls = outputs['loss_rpn_cls'].mean()
-                loss_rpn_bbox = outputs['loss_rpn_bbox'].mean()
-                loss_rcnn_cls = outputs['loss_rcnn_cls'].mean()
-                loss_rcnn_bbox = outputs['loss_rcnn_bbox'].mean()
+                training_stats.UpdateIterStats(net_outputs)
 
-                loss = loss_rpn_cls + loss_rpn_bbox + loss_rcnn_cls + loss_rcnn_bbox
-
-                if cfg.MODEL.MASK_ON:
-                    loss_rcnn_mask = outputs['loss_rcnn_mask'].mean()
-                    loss += loss_rcnn_mask
-
-                if cfg.MODEL.KEYPOINTS_ON:
-                    loss_rcnn_keypoints = outputs['loss_rcnn_keypoints'].mean()
-                    loss += loss_rcnn_keypoints
-
-                loss_avg += loss.data.cpu().numpy()[0]
-
+                loss = net_outputs['total_loss']
                 optimizer.zero_grad()
                 loss.backward()
                 optimizer.step()
 
-                if (step+1) % ckpt_interval_per_epoch == 0:
-                    net_utils.save_ckpt(output_dir, args, epoch, step, maskRCNN, optimizer, iters_per_epoch)
+                if (args.step+1) % ckpt_interval_per_epoch == 0:
+                    net_utils.save_ckpt(output_dir, args, maskRCNN, optimizer)
 
-                if (step+1) % args.disp_interval == 0:
-                    if (step + 1 - args.start_iter) >= args.disp_interval:  # for the case of resume
-                        diff = timers['train_loop'].toc(average=False)
-                        loss_avg /= args.disp_interval
+                if args.step % args.disp_interval == 0:
+                    log_training_stats(training_stats, global_step, lr)
 
-                        loss_rpn_cls = loss_rpn_cls.data[0]
-                        loss_rpn_bbox = loss_rpn_bbox.data[0]
-                        loss_rcnn_cls = loss_rcnn_cls.data[0]
-                        loss_rcnn_bbox = loss_rcnn_bbox.data[0]
-                        fg_cnt = torch.sum(rois_label.data.ne(0))
-                        bg_cnt = rois_label.data.numel() - fg_cnt
-                        print("[%s][epoch %2d][iter %4d / %4d]"
-                            % (run_name, epoch, step, iters_per_epoch))
-                        print("\t\tloss: %.4f, lr: %.2e" % (loss_avg, lr))
-                        print("\t\tfg/bg=(%d/%d), time cost: %f" % (fg_cnt, bg_cnt, diff))
-                        print("\t\trpn_cls: %.4f, rpn_bbox: %.4f, rcnn_cls: %.4f, rcnn_bbox %.4f"
-                            % (loss_rpn_cls, loss_rpn_bbox, loss_rcnn_cls, loss_rcnn_bbox))
-
-                        print_prefix = "\t\t"
-                        if cfg.MODEL.MASK_ON:
-                            loss_rcnn_mask = loss_rcnn_mask.data[0]
-                            print("%srcnn_mask %.4f" % (print_prefix, loss_rcnn_mask))
-                            print_prefix = ", "
-                        if cfg.MODEL.KEYPOINTS_ON:
-                            loss_rcnn_keypoints = loss_rcnn_keypoints.data[0]
-                            print("%srcnn_keypoints %.4f" % (print_prefix, loss_rcnn_keypoints))
-
-                        if args.use_tfboard and not args.no_save:
-                            info = {
-                                'loss': loss_avg,
-                                'loss_rpn_cls': loss_rpn_cls,
-                                'loss_rpn_box': loss_rpn_bbox,
-                                'loss_rcnn_cls': loss_rcnn_cls,
-                                'loss_rcnn_box': loss_rcnn_bbox,
-                            }
-                            if cfg.MODEL.MASK_ON:
-                                info['loss_rcnn_mask'] = loss_rcnn_mask
-                            if cfg.MODEL.KEYPOINTS_ON:
-                                info['loss_rcnn_keypoints'] = loss_rcnn_keypoints
-                            for tag, value in info.items():
-                                tblogger.add_scalar(tag, value, iters_per_epoch * epoch + step)
-
-                    loss_avg = 0
-                    timers['train_loop'].tic()
+                global_step += 1
 
             # ---- End of epoch ----
             # save checkpoint
-            net_utils.save_ckpt(output_dir, args, epoch, step, maskRCNN, optimizer, iters_per_epoch)
-            # reset timer
-            timers['train_loop'].reset()
+            net_utils.save_ckpt(output_dir, args, maskRCNN, optimizer)
             # reset starting iter number after first epoch
             args.start_iter = 0
 
+        # ---- Training ends ----
+        if iters_per_epoch % args.disp_interval != 0:
+            # log last stats at the end
+            log_training_stats(training_stats, global_step, lr)
+
     except (RuntimeError, KeyboardInterrupt) as e:
         print('Save on exception:', e)
-        net_utils.save_ckpt(output_dir, args, epoch, step, maskRCNN, optimizer, iters_per_epoch)
+        net_utils.save_ckpt(output_dir, args, maskRCNN, optimizer)
         stack_trace = traceback.format_exc()
         print(stack_trace)
 
     finally:
-        # ---- Training ends ----
         if args.use_tfboard and not args.no_save:
             tblogger.close()
+
+
+def log_training_stats(training_stats, global_step, lr):
+    stats = training_stats.GetStats(global_step, lr)
+    log_stats(stats, training_stats.misc_args)
+    if training_stats.tblogger:
+        training_stats.tb_log_stats(stats, global_step)
 
 
 if __name__ == '__main__':

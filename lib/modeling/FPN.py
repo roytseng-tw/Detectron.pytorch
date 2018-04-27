@@ -387,7 +387,7 @@ def fpn_rpn_losses(**kwargs):
         losses_cls.append(loss_rpn_cls_fpn)
         losses_bbox.append(loss_rpn_bbox_fpn)
 
-    return torch.cat(losses_cls), torch.cat(losses_bbox)
+    return losses_cls, losses_bbox
 
 
 # ---------------------------------------------------------------------------- #

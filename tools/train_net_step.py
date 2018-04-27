@@ -27,6 +27,7 @@ from modeling.model_builder import Generalized_RCNN
 from utils.detectron_weight_helper import load_detectron_weight
 from utils.logging import setup_logging
 from utils.timer import Timer
+from utils.training_stats import TrainingStats
 
  # Set up logging and load config options
 logger = setup_logging(__name__)
@@ -276,8 +277,9 @@ def main():
                                  minibatch=True)
 
     ### Training Setups ###
-    run_name = misc_utils.get_run_name()
-    output_dir = misc_utils.get_output_dir(args, run_name)
+    args.run_name = misc_utils.get_run_name() + '_step'
+    output_dir = misc_utils.get_output_dir(args, args.run_name)
+    args.cfg_filename = os.path.basename(args.cfg_file)
 
     if not args.no_save:
         if not os.path.exists(output_dir):
@@ -306,13 +308,13 @@ def main():
     if decay_steps_ind is None:
         decay_steps_ind = len(cfg.SOLVER.STEPS)
 
-    logger.info('Training starts !')
-    loss_avg = 0
-    prev_disp_step = args.start_step - 1
+    training_stats = TrainingStats(
+        args,
+        args.disp_interval,
+        tblogger if args.use_tfboard and not args.no_save else None)
     try:
-        timers['train_loop'].tic()
+        logger.info('Training starts !')
         for step in range(args.start_step, cfg.SOLVER.MAX_ITER):
-            loss = 0
 
             # Warm up
             if step < cfg.SOLVER.WARM_UP_ITERS:
@@ -353,80 +355,20 @@ def main():
                 if key != 'roidb': # roidb is a list of ndarrays with inconsistent length
                     input_data[key] = list(map(Variable, input_data[key]))
 
-            outputs = maskRCNN(**input_data)
+            training_stats.IterTic()
+            net_outputs = maskRCNN(**input_data)
+            training_stats.IterToc()
 
-            rois_label = outputs['rois_label']
-            cls_score = outputs['cls_score']
-            bbox_pred = outputs['bbox_pred']
-            loss_rpn_cls = outputs['loss_rpn_cls'].mean()
-            loss_rpn_bbox = outputs['loss_rpn_bbox'].mean()
-            loss_rcnn_cls = outputs['loss_rcnn_cls'].mean()
-            loss_rcnn_bbox = outputs['loss_rcnn_bbox'].mean()
+            training_stats.UpdateIterStats(net_outputs)
+            training_stats.LogIterStats(step, lr)
 
-            loss = loss_rpn_cls + loss_rpn_bbox + loss_rcnn_cls + loss_rcnn_bbox
-
-            if cfg.MODEL.MASK_ON:
-                loss_rcnn_mask = outputs['loss_rcnn_mask'].mean()
-                loss += loss_rcnn_mask
-
-            if cfg.MODEL.KEYPOINTS_ON:
-                loss_rcnn_keypoints = outputs['loss_rcnn_keypoints'].mean()
-                loss += loss_rcnn_keypoints
-
-            loss_avg += loss.data.cpu().numpy()[0]
-
+            loss = net_outputs['total_loss']
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
 
             if (step+1) % CHECKPOINT_PERIOD == 0:
                 save_ckpt(output_dir, args, step, train_size, maskRCNN, optimizer)
-
-            if step % args.disp_interval == 0 or step == (cfg.SOLVER.MAX_ITER - 1)== 0:
-                n_steps = step - prev_disp_step
-                loss_avg /= n_steps
-                prev_disp_step = step
-                diff = timers['train_loop'].toc(average=False)
-
-                loss_rpn_cls = loss_rpn_cls.data[0]
-                loss_rpn_bbox = loss_rpn_bbox.data[0]
-                loss_rcnn_cls = loss_rcnn_cls.data[0]
-                loss_rcnn_bbox = loss_rcnn_bbox.data[0]
-                fg_cnt = torch.sum(rois_label.data.ne(0))
-                bg_cnt = rois_label.data.numel() - fg_cnt
-                print("[ %s ][ step %d ]" % (run_name, step))
-                print("\t\tloss: %.4f, lr: %.6f" % (loss_avg, lr))
-                print("\t\tfg/bg=(%d/%d), time cost (per step): %f " % (fg_cnt, bg_cnt, diff / n_steps))
-                print("\t\trpn_cls: %.4f, rpn_bbox: %.4f, rcnn_cls: %.4f, rcnn_bbox %.4f"
-                    % (loss_rpn_cls, loss_rpn_bbox, loss_rcnn_cls, loss_rcnn_bbox))
-
-                print_prefix = "\t\t"
-                if cfg.MODEL.MASK_ON:
-                    loss_rcnn_mask = loss_rcnn_mask.data[0]
-                    print("%srcnn_mask %.4f" % (print_prefix, loss_rcnn_mask))
-                    print_prefix = ", "
-                if cfg.MODEL.KEYPOINTS_ON:
-                    loss_rcnn_keypoints = loss_rcnn_keypoints.data[0]
-                    print("%srcnn_keypoints %.4f" % (print_prefix, loss_rcnn_keypoints))
-
-                if args.use_tfboard and not args.no_save:
-                    info = {
-                        'lr': lr,
-                        'loss': loss_avg,
-                        'loss_rpn_cls': loss_rpn_cls,
-                        'loss_rpn_box': loss_rpn_bbox,
-                        'loss_rcnn_cls': loss_rcnn_cls,
-                        'loss_rcnn_box': loss_rcnn_bbox,
-                    }
-                    if cfg.MODEL.MASK_ON:
-                        info['loss_rcnn_mask'] = loss_rcnn_mask
-                    if cfg.MODEL.KEYPOINTS_ON:
-                        info['loss_rcnn_keypoints'] = loss_rcnn_keypoints
-                    for tag, value in info.items():
-                        tblogger.add_scalar(tag, value, step)
-
-                loss_avg = 0
-                timers['train_loop'].tic()
 
         # Save last checkpoint
         save_ckpt(output_dir, args, step, train_size, maskRCNN, optimizer)

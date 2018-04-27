@@ -123,10 +123,9 @@ class Generalized_RCNN(nn.Module):
 
         rpn_ret = self.RPN(blob_conv, im_info, roidb)
 
-        rois = Variable(torch.from_numpy(rpn_ret['rois'])).cuda(device_id)
-        return_dict['rois'] = rois
-        if self.training:
-            return_dict['rois_label'] = rpn_ret['labels_int32']
+        # if self.training:
+        #     # can be used to infer fg/bg ratio
+        #     return_dict['rois_label'] = rpn_ret['labels_int32']
 
         if cfg.FPN.FPN_ON:
             # Retain only the blobs that will be used for RoI heads. `blob_conv` may include
@@ -142,28 +141,34 @@ class Generalized_RCNN(nn.Module):
             else:
                 box_feat = self.Box_Head(blob_conv, rpn_ret)
             cls_score, bbox_pred = self.Box_Outs(box_feat)
-            return_dict['cls_score'] = cls_score
-            return_dict['bbox_pred'] = bbox_pred
         else:
             # TODO: complete the returns for RPN only situation
             pass
 
         if self.training:
+            return_dict['losses'] = {}
+            return_dict['metrics'] = {}
             # rpn loss
             rpn_kwargs.update(dict(
                 (k, rpn_ret[k]) for k in rpn_ret.keys()
                 if (k.startswith('rpn_cls_logits') or k.startswith('rpn_bbox_pred'))
             ))
             loss_rpn_cls, loss_rpn_bbox = rpn_heads.generic_rpn_losses(**rpn_kwargs)
-            return_dict['loss_rpn_cls'] = loss_rpn_cls
-            return_dict['loss_rpn_bbox'] = loss_rpn_bbox
+            if cfg.FPN.FPN_ON:
+                for i, lvl in enumerate(range(cfg.FPN.RPN_MIN_LEVEL, cfg.FPN.RPN_MAX_LEVEL + 1)):
+                    return_dict['losses']['loss_rpn_cls_fpn%d' % lvl] = loss_rpn_cls[i]
+                    return_dict['losses']['loss_rpn_bbox_fpn%d' % lvl] = loss_rpn_bbox[i]
+            else:
+                return_dict['losses']['loss_rpn_cls'] = loss_rpn_cls
+                return_dict['losses']['loss_rpn_bbox'] = loss_rpn_bbox
 
             # bbox loss
-            loss_cls, loss_bbox = fast_rcnn_heads.fast_rcnn_losses(
+            loss_cls, loss_bbox, accuracy_cls = fast_rcnn_heads.fast_rcnn_losses(
                 cls_score, bbox_pred, rpn_ret['labels_int32'], rpn_ret['bbox_targets'],
                 rpn_ret['bbox_inside_weights'], rpn_ret['bbox_outside_weights'])
-            return_dict['loss_rcnn_cls'] = loss_cls
-            return_dict['loss_rcnn_bbox'] = loss_bbox
+            return_dict['losses']['loss_cls'] = loss_cls
+            return_dict['losses']['loss_bbox'] = loss_bbox
+            return_dict['metrics']['accuracy_cls'] = accuracy_cls
 
             if cfg.MODEL.MASK_ON:
                 if getattr(self.Mask_Head, 'SHARE_RES5', False):
@@ -175,7 +180,7 @@ class Generalized_RCNN(nn.Module):
                 # return_dict['mask_pred'] = mask_pred
                 # mask loss
                 loss_mask = mask_rcnn_heads.mask_rcnn_losses(mask_pred, rpn_ret['masks_int32'])
-                return_dict['loss_rcnn_mask'] = loss_mask
+                return_dict['losses']['loss_mask'] = loss_mask
 
             if cfg.MODEL.KEYPOINTS_ON:
                 if getattr(self.Keypoint_Head, 'SHARE_RES5', False):
@@ -195,7 +200,11 @@ class Generalized_RCNN(nn.Module):
                     loss_keypoints = keypoint_rcnn_heads.keypoint_losses(
                         kps_pred, rpn_ret['keypoint_locations_int32'], rpn_ret['keypoint_weights'],
                         rpn_ret['keypoint_loss_normalizer'])
-                return_dict['loss_rcnn_keypoints'] = loss_keypoints
+                return_dict['losses']['loss_kps'] = loss_keypoints
+        else:
+            # Testing
+            return_dict['cls_score'] = cls_score
+            return_dict['bbox_pred'] = bbox_pred
 
         return return_dict
 
@@ -308,5 +317,9 @@ class Generalized_RCNN(nn.Module):
                         d_wmap[new_key] = value
             self.mapping_to_detectron = d_wmap
             self.orphans_in_detectron = d_orphan
-        
+
         return self.mapping_to_detectron, self.orphans_in_detectron
+
+    def _add_loss(self, return_dict, key, value):
+        """Add loss tensor to returned dictionary"""
+        return_dict['losses'][key] = value
