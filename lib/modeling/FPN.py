@@ -12,6 +12,7 @@ import modeling.ResNet as ResNet
 from modeling.generate_anchors import generate_anchors
 from modeling.generate_proposals import GenerateProposalsOp
 from modeling.collect_and_distribute_fpn_rpn_proposals import CollectAndDistributeFpnRpnProposalsOp
+import nn as mynn
 
 # Lowest and highest pyramid levels in the backbone network. For FPN, we assume
 # that all networks have 5 spatial reductions, each by a factor of 2. Level 1
@@ -142,7 +143,7 @@ class fpn(nn.Module):
     def _init_weights(self):
         def init_func(m):
             if isinstance(m, nn.Conv2d):
-                init.xavier_uniform(m.weight)
+                mynn.init.XavierFill(m.weight)
                 init.constant(m.bias, 0)
         self.apply(init_func)
 
@@ -229,7 +230,7 @@ class topdown_lateral_module(nn.Module):
         self._init_weights()
 
     def _init_weights(self):
-        init.xavier_uniform(self.conv_lateral.weight)
+        mynn.init.XavierFill(self.conv_lateral.weight)
         init.constant(self.conv_lateral.bias, 0)
 
     def forward(self, top_blob, lateral_blob):

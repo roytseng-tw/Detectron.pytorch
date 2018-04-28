@@ -62,8 +62,11 @@ def im_detect_all(model, im, box_proposals=None, timers=None):
         timers = defaultdict(Timer)
 
     timers['im_detect_bbox'].tic()
-    scores, boxes, im_scale, blob_conv = im_detect_bbox(
-        model, im, cfg.TEST.SCALE, cfg.TEST.MAX_SIZE, box_proposals)
+    if cfg.TEST.BBOX_AUG.ENABLED:
+        scores, boxes, im_scale, blob_conv = im_detect_bbox_aug(model, im, box_proposals)
+    else:
+        scores, boxes, im_scale, blob_conv = im_detect_bbox(
+            model, im, cfg.TEST.SCALE, cfg.TEST.MAX_SIZE, box_proposals)
     timers['im_detect_bbox'].toc()
 
     # score and boxes are from the whole image after score thresholding and nms
@@ -76,7 +79,10 @@ def im_detect_all(model, im, box_proposals=None, timers=None):
 
     if cfg.MODEL.MASK_ON and boxes.shape[0] > 0:
         timers['im_detect_mask'].tic()
-        masks = im_detect_mask(model, im_scale, boxes, blob_conv)
+        if cfg.TEST.MASK_AUG.ENABLED:
+            masks = im_detect_mask_aug(model, im, boxes, blob_conv)
+        else:
+            masks = im_detect_mask(model, im_scale, boxes, blob_conv)
         timers['im_detect_mask'].toc()
 
         timers['misc_mask'].tic()
@@ -88,8 +94,7 @@ def im_detect_all(model, im, box_proposals=None, timers=None):
     if cfg.MODEL.KEYPOINTS_ON and boxes.shape[0] > 0:
         timers['im_detect_keypoints'].tic()
         if cfg.TEST.KPS_AUG.ENABLED:
-            raise NotImplementedError
-            # heatmaps = im_detect_keypoints_aug(model, im, boxes)
+            heatmaps = im_detect_keypoints_aug(model, im, boxes, blob_conv)
         else:
             heatmaps = im_detect_keypoints(model, im_scale, boxes, blob_conv)
         timers['im_detect_keypoints'].toc()
@@ -164,6 +169,179 @@ def im_detect_bbox(model, im, target_scale, target_max_size, boxes=None):
     return scores, pred_boxes, im_scale, return_dict['blob_conv']
 
 
+def im_detect_bbox_aug(model, im, box_proposals=None):
+    """Performs bbox detection with test-time augmentations.
+    Function signature is the same as for im_detect_bbox.
+    """
+    assert not cfg.TEST.BBOX_AUG.SCALE_SIZE_DEP, \
+        'Size dependent scaling not implemented'
+    assert not cfg.TEST.BBOX_AUG.SCORE_HEUR == 'UNION' or \
+        cfg.TEST.BBOX_AUG.COORD_HEUR == 'UNION', \
+        'Coord heuristic must be union whenever score heuristic is union'
+    assert not cfg.TEST.BBOX_AUG.COORD_HEUR == 'UNION' or \
+        cfg.TEST.BBOX_AUG.SCORE_HEUR == 'UNION', \
+        'Score heuristic must be union whenever coord heuristic is union'
+    assert not cfg.MODEL.FASTER_RCNN or \
+        cfg.TEST.BBOX_AUG.SCORE_HEUR == 'UNION', \
+        'Union heuristic must be used to combine Faster RCNN predictions'
+
+    # Collect detections computed under different transformations
+    scores_ts = []
+    boxes_ts = []
+
+    def add_preds_t(scores_t, boxes_t):
+        scores_ts.append(scores_t)
+        boxes_ts.append(boxes_t)
+
+    # Perform detection on the horizontally flipped image
+    if cfg.TEST.BBOX_AUG.H_FLIP:
+        scores_hf, boxes_hf, _ = im_detect_bbox_hflip(
+            model,
+            im,
+            cfg.TEST.SCALE,
+            cfg.TEST.MAX_SIZE,
+            box_proposals=box_proposals
+        )
+        add_preds_t(scores_hf, boxes_hf)
+
+    # Compute detections at different scales
+    for scale in cfg.TEST.BBOX_AUG.SCALES:
+        max_size = cfg.TEST.BBOX_AUG.MAX_SIZE
+        scores_scl, boxes_scl = im_detect_bbox_scale(
+            model, im, scale, max_size, box_proposals
+        )
+        add_preds_t(scores_scl, boxes_scl)
+
+        if cfg.TEST.BBOX_AUG.SCALE_H_FLIP:
+            scores_scl_hf, boxes_scl_hf = im_detect_bbox_scale(
+                model, im, scale, max_size, box_proposals, hflip=True
+            )
+            add_preds_t(scores_scl_hf, boxes_scl_hf)
+
+    # Perform detection at different aspect ratios
+    for aspect_ratio in cfg.TEST.BBOX_AUG.ASPECT_RATIOS:
+        scores_ar, boxes_ar = im_detect_bbox_aspect_ratio(
+            model, im, aspect_ratio, box_proposals
+        )
+        add_preds_t(scores_ar, boxes_ar)
+
+        if cfg.TEST.BBOX_AUG.ASPECT_RATIO_H_FLIP:
+            scores_ar_hf, boxes_ar_hf = im_detect_bbox_aspect_ratio(
+                model, im, aspect_ratio, box_proposals, hflip=True
+            )
+            add_preds_t(scores_ar_hf, boxes_ar_hf)
+
+    # Compute detections for the original image (identity transform) last to
+    # ensure that the Caffe2 workspace is populated with blobs corresponding
+    # to the original image on return (postcondition of im_detect_bbox)
+    scores_i, boxes_i, im_scale_i = im_detect_bbox(
+        model, im, cfg.TEST.SCALE, cfg.TEST.MAX_SIZE, boxes=box_proposals
+    )
+    add_preds_t(scores_i, boxes_i)
+
+    # Combine the predicted scores
+    if cfg.TEST.BBOX_AUG.SCORE_HEUR == 'ID':
+        scores_c = scores_i
+    elif cfg.TEST.BBOX_AUG.SCORE_HEUR == 'AVG':
+        scores_c = np.mean(scores_ts, axis=0)
+    elif cfg.TEST.BBOX_AUG.SCORE_HEUR == 'UNION':
+        scores_c = np.vstack(scores_ts)
+    else:
+        raise NotImplementedError(
+            'Score heur {} not supported'.format(cfg.TEST.BBOX_AUG.SCORE_HEUR)
+        )
+
+    # Combine the predicted boxes
+    if cfg.TEST.BBOX_AUG.COORD_HEUR == 'ID':
+        boxes_c = boxes_i
+    elif cfg.TEST.BBOX_AUG.COORD_HEUR == 'AVG':
+        boxes_c = np.mean(boxes_ts, axis=0)
+    elif cfg.TEST.BBOX_AUG.COORD_HEUR == 'UNION':
+        boxes_c = np.vstack(boxes_ts)
+    else:
+        raise NotImplementedError(
+            'Coord heur {} not supported'.format(cfg.TEST.BBOX_AUG.COORD_HEUR)
+        )
+
+    return scores_c, boxes_c, im_scale_i
+
+
+def im_detect_bbox_hflip(
+    model, im, target_scale, target_max_size, box_proposals=None):
+    """Performs bbox detection on the horizontally flipped image.
+    Function signature is the same as for im_detect_bbox.
+    """
+    # Compute predictions on the flipped image
+    im_hf = im[:, ::-1, :]
+    im_width = im.shape[1]
+
+    if not cfg.MODEL.FASTER_RCNN:
+        box_proposals_hf = box_utils.flip_boxes(box_proposals, im_width)
+    else:
+        box_proposals_hf = None
+
+    scores_hf, boxes_hf, im_scale = im_detect_bbox(
+        model, im_hf, target_scale, target_max_size, boxes=box_proposals_hf
+    )
+
+    # Invert the detections computed on the flipped image
+    boxes_inv = box_utils.flip_boxes(boxes_hf, im_width)
+
+    return scores_hf, boxes_inv, im_scale
+
+
+def im_detect_bbox_scale(
+    model, im, target_scale, target_max_size, box_proposals=None, hflip=False):
+    """Computes bbox detections at the given scale.
+    Returns predictions in the original image space.
+    """
+    if hflip:
+        scores_scl, boxes_scl, _ = im_detect_bbox_hflip(
+            model, im, target_scale, target_max_size, box_proposals=box_proposals
+        )
+    else:
+        scores_scl, boxes_scl, _ = im_detect_bbox(
+            model, im, target_scale, target_max_size, boxes=box_proposals
+        )
+    return scores_scl, boxes_scl
+
+
+def im_detect_bbox_aspect_ratio(
+    model, im, aspect_ratio, box_proposals=None, hflip=False):
+    """Computes bbox detections at the given width-relative aspect ratio.
+    Returns predictions in the original image space.
+    """
+    # Compute predictions on the transformed image
+    im_ar = image_utils.aspect_ratio_rel(im, aspect_ratio)
+
+    if not cfg.MODEL.FASTER_RCNN:
+        box_proposals_ar = box_utils.aspect_ratio(box_proposals, aspect_ratio)
+    else:
+        box_proposals_ar = None
+
+    if hflip:
+        scores_ar, boxes_ar, _ = im_detect_bbox_hflip(
+            model,
+            im_ar,
+            cfg.TEST.SCALE,
+            cfg.TEST.MAX_SIZE,
+            box_proposals=box_proposals_ar
+        )
+    else:
+        scores_ar, boxes_ar, _ = im_detect_bbox(
+            model,
+            im_ar,
+            cfg.TEST.SCALE,
+            cfg.TEST.MAX_SIZE,
+            boxes=box_proposals_ar
+        )
+
+    # Invert the detected boxes
+    boxes_inv = box_utils.aspect_ratio(boxes_ar, 1.0 / aspect_ratio)
+
+    return scores_ar, boxes_inv
+
+
 def im_detect_mask(model, im_scale, boxes, blob_conv):
     """Infer instance segmentation masks. This function must be called after
     im_detect_bbox as it assumes that the Caffe2 workspace is already populated
@@ -203,6 +381,129 @@ def im_detect_mask(model, im_scale, boxes, blob_conv):
     return pred_masks
 
 
+def im_detect_mask_aug(model, im, boxes):
+    """Performs mask detection with test-time augmentations.
+
+    Arguments:
+        model (DetectionModelHelper): the detection model to use
+        im (ndarray): BGR image to test
+        boxes (ndarray): R x 4 array of bounding boxes
+
+    Returns:
+        masks (ndarray): R x K x M x M array of class specific soft masks
+    """
+    assert not cfg.TEST.MASK_AUG.SCALE_SIZE_DEP, \
+        'Size dependent scaling not implemented'
+
+    # Collect masks computed under different transformations
+    masks_ts = []
+
+    # Compute masks for the original image (identity transform)
+    im_scale_i = im_conv_body_only(model, im, cfg.TEST.SCALE, cfg.TEST.MAX_SIZE)
+    masks_i = im_detect_mask(model, im_scale_i, boxes)
+    masks_ts.append(masks_i)
+
+    # Perform mask detection on the horizontally flipped image
+    if cfg.TEST.MASK_AUG.H_FLIP:
+        masks_hf = im_detect_mask_hflip(
+            model, im, cfg.TEST.SCALE, cfg.TEST.MAX_SIZE, boxes
+        )
+        masks_ts.append(masks_hf)
+
+    # Compute detections at different scales
+    for scale in cfg.TEST.MASK_AUG.SCALES:
+        max_size = cfg.TEST.MASK_AUG.MAX_SIZE
+        masks_scl = im_detect_mask_scale(model, im, scale, max_size, boxes)
+        masks_ts.append(masks_scl)
+
+        if cfg.TEST.MASK_AUG.SCALE_H_FLIP:
+            masks_scl_hf = im_detect_mask_scale(
+                model, im, scale, max_size, boxes, hflip=True
+            )
+            masks_ts.append(masks_scl_hf)
+
+    # Compute masks at different aspect ratios
+    for aspect_ratio in cfg.TEST.MASK_AUG.ASPECT_RATIOS:
+        masks_ar = im_detect_mask_aspect_ratio(model, im, aspect_ratio, boxes)
+        masks_ts.append(masks_ar)
+
+        if cfg.TEST.MASK_AUG.ASPECT_RATIO_H_FLIP:
+            masks_ar_hf = im_detect_mask_aspect_ratio(
+                model, im, aspect_ratio, boxes, hflip=True
+            )
+            masks_ts.append(masks_ar_hf)
+
+    # Combine the predicted soft masks
+    if cfg.TEST.MASK_AUG.HEUR == 'SOFT_AVG':
+        masks_c = np.mean(masks_ts, axis=0)
+    elif cfg.TEST.MASK_AUG.HEUR == 'SOFT_MAX':
+        masks_c = np.amax(masks_ts, axis=0)
+    elif cfg.TEST.MASK_AUG.HEUR == 'LOGIT_AVG':
+
+        def logit(y):
+            return -1.0 * np.log((1.0 - y) / np.maximum(y, 1e-20))
+
+        logit_masks = [logit(y) for y in masks_ts]
+        logit_masks = np.mean(logit_masks, axis=0)
+        masks_c = 1.0 / (1.0 + np.exp(-logit_masks))
+    else:
+        raise NotImplementedError(
+            'Heuristic {} not supported'.format(cfg.TEST.MASK_AUG.HEUR)
+        )
+
+    return masks_c
+
+
+def im_detect_mask_hflip(model, im, target_scale, target_max_size, boxes):
+    """Performs mask detection on the horizontally flipped image.
+    Function signature is the same as for im_detect_mask_aug.
+    """
+    # Compute the masks for the flipped image
+    im_hf = im[:, ::-1, :]
+    boxes_hf = box_utils.flip_boxes(boxes, im.shape[1])
+
+    im_scale = im_conv_body_only(model, im_hf, target_scale, target_max_size)
+    masks_hf = im_detect_mask(model, im_scale, boxes_hf)
+
+    # Invert the predicted soft masks
+    masks_inv = masks_hf[:, :, :, ::-1]
+
+    return masks_inv
+
+
+def im_detect_mask_scale(
+    model, im, target_scale, target_max_size, boxes, hflip=False):
+    """Computes masks at the given scale."""
+    if hflip:
+        masks_scl = im_detect_mask_hflip(
+            model, im, target_scale, target_max_size, boxes
+        )
+    else:
+        im_scale = im_conv_body_only(model, im, target_scale, target_max_size)
+        masks_scl = im_detect_mask(model, im_scale, boxes)
+    return masks_scl
+
+
+def im_detect_mask_aspect_ratio(model, im, aspect_ratio, boxes, hflip=False):
+    """Computes mask detections at the given width-relative aspect ratio."""
+
+    # Perform mask detection on the transformed image
+    im_ar = image_utils.aspect_ratio_rel(im, aspect_ratio)
+    boxes_ar = box_utils.aspect_ratio(boxes, aspect_ratio)
+
+    if hflip:
+        masks_ar = im_detect_mask_hflip(
+            model, im_ar, cfg.TEST.SCALE, cfg.TEST.MAX_SIZE, boxes_ar
+        )
+    else:
+        im_scale = im_conv_body_only(
+            model, im_ar, cfg.TEST.SCALE, cfg.TEST.MAX_SIZE
+        )
+        masks_ar = im_detect_mask(model, im_scale, boxes_ar)
+
+    return masks_ar
+
+
 def im_detect_keypoints(model, im_scale, boxes, blob_conv):
     """Infer instance keypoint poses. This function must be called after
     im_detect_bbox as it assumes that the Caffe2 workspace is already populated
@@ -239,6 +540,174 @@ def im_detect_keypoints(model, im_scale, boxes, blob_conv):
         pred_heatmaps = np.expand_dims(pred_heatmaps, axis=0)
 
     return pred_heatmaps
+
+
+def im_detect_keypoints_aug(model, im, boxes):
+    """Computes keypoint predictions with test-time augmentations.
+
+    Arguments:
+        model (DetectionModelHelper): the detection model to use
+        im (ndarray): BGR image to test
+        boxes (ndarray): R x 4 array of bounding boxes
+
+    Returns:
+        heatmaps (ndarray): R x J x M x M array of keypoint location logits
+    """
+
+    # Collect heatmaps predicted under different transformations
+    heatmaps_ts = []
+    # Tag predictions computed under downscaling and upscaling transformations
+    ds_ts = []
+    us_ts = []
+
+    def add_heatmaps_t(heatmaps_t, ds_t=False, us_t=False):
+        heatmaps_ts.append(heatmaps_t)
+        ds_ts.append(ds_t)
+        us_ts.append(us_t)
+
+    # Compute the heatmaps for the original image (identity transform)
+    im_scale = im_conv_body_only(model, im, cfg.TEST.SCALE, cfg.TEST.MAX_SIZE)
+    heatmaps_i = im_detect_keypoints(model, im_scale, boxes)
+    add_heatmaps_t(heatmaps_i)
+
+    # Perform keypoints detection on the horizontally flipped image
+    if cfg.TEST.KPS_AUG.H_FLIP:
+        heatmaps_hf = im_detect_keypoints_hflip(
+            model, im, cfg.TEST.SCALE, cfg.TEST.MAX_SIZE, boxes
+        )
+        add_heatmaps_t(heatmaps_hf)
+
+    # Compute detections at different scales
+    for scale in cfg.TEST.KPS_AUG.SCALES:
+        ds_scl = scale < cfg.TEST.SCALE
+        us_scl = scale > cfg.TEST.SCALE
+        heatmaps_scl = im_detect_keypoints_scale(
+            model, im, scale, cfg.TEST.KPS_AUG.MAX_SIZE, boxes
+        )
+        add_heatmaps_t(heatmaps_scl, ds_scl, us_scl)
+
+        if cfg.TEST.KPS_AUG.SCALE_H_FLIP:
+            heatmaps_scl_hf = im_detect_keypoints_scale(
+                model, im, scale, cfg.TEST.KPS_AUG.MAX_SIZE, boxes, hflip=True
+            )
+            add_heatmaps_t(heatmaps_scl_hf, ds_scl, us_scl)
+
+    # Compute keypoints at different aspect ratios
+    for aspect_ratio in cfg.TEST.KPS_AUG.ASPECT_RATIOS:
+        heatmaps_ar = im_detect_keypoints_aspect_ratio(
+            model, im, aspect_ratio, boxes
+        )
+        add_heatmaps_t(heatmaps_ar)
+
+        if cfg.TEST.KPS_AUG.ASPECT_RATIO_H_FLIP:
+            heatmaps_ar_hf = im_detect_keypoints_aspect_ratio(
+                model, im, aspect_ratio, boxes, hflip=True
+            )
+            add_heatmaps_t(heatmaps_ar_hf)
+
+    # Select the heuristic function for combining the heatmaps
+    if cfg.TEST.KPS_AUG.HEUR == 'HM_AVG':
+        np_f = np.mean
+    elif cfg.TEST.KPS_AUG.HEUR == 'HM_MAX':
+        np_f = np.amax
+    else:
+        raise NotImplementedError(
+            'Heuristic {} not supported'.format(cfg.TEST.KPS_AUG.HEUR)
+        )
+
+    def heur_f(hms_ts):
+        return np_f(hms_ts, axis=0)
+
+    # Combine the heatmaps
+    if cfg.TEST.KPS_AUG.SCALE_SIZE_DEP:
+        heatmaps_c = combine_heatmaps_size_dep(
+            heatmaps_ts, ds_ts, us_ts, boxes, heur_f
+        )
+    else:
+        heatmaps_c = heur_f(heatmaps_ts)
+
+    return heatmaps_c
+
+
+def im_detect_keypoints_hflip(model, im, target_scale, target_max_size, boxes):
+    """Computes keypoint predictions on the horizontally flipped image.
+    Function signature is the same as for im_detect_keypoints_aug.
+    """
+    # Compute keypoints for the flipped image
+    im_hf = im[:, ::-1, :]
+    boxes_hf = box_utils.flip_boxes(boxes, im.shape[1])
+
+    im_scale = im_conv_body_only(model, im_hf, target_scale, target_max_size)
+    heatmaps_hf = im_detect_keypoints(model, im_scale, boxes_hf)
+
+    # Invert the predicted keypoints
+    heatmaps_inv = keypoint_utils.flip_heatmaps(heatmaps_hf)
+
+    return heatmaps_inv
+
+
+def im_detect_keypoints_scale(
+    model, im, target_scale, target_max_size, boxes, hflip=False
+):
+    """Computes keypoint predictions at the given scale."""
+    if hflip:
+        heatmaps_scl = im_detect_keypoints_hflip(
+            model, im, target_scale, target_max_size, boxes
+        )
+    else:
+        im_scale = im_conv_body_only(model, im, target_scale, target_max_size)
+        heatmaps_scl = im_detect_keypoints(model, im_scale, boxes)
+    return heatmaps_scl
+
+
+def im_detect_keypoints_aspect_ratio(
+    model, im, aspect_ratio, boxes, hflip=False
+):
+    """Detects keypoints at the given width-relative aspect ratio."""
+
+    # Perform keypoint detectionon the transformed image
+    im_ar = image_utils.aspect_ratio_rel(im, aspect_ratio)
+    boxes_ar = box_utils.aspect_ratio(boxes, aspect_ratio)
+
+    if hflip:
+        heatmaps_ar = im_detect_keypoints_hflip(
+            model, im_ar, cfg.TEST.SCALE, cfg.TEST.MAX_SIZE, boxes_ar
+        )
+    else:
+        im_scale = im_conv_body_only(
+            model, im_ar, cfg.TEST.SCALE, cfg.TEST.MAX_SIZE
+        )
+        heatmaps_ar = im_detect_keypoints(model, im_scale, boxes_ar)
+
+    return heatmaps_ar
+
+
+def combine_heatmaps_size_dep(hms_ts, ds_ts, us_ts, boxes, heur_f):
+    """Combines heatmaps while taking object sizes into account."""
+    assert len(hms_ts) == len(ds_ts) and len(ds_ts) == len(us_ts), \
+        'All sets of hms must be tagged with downscaling and upscaling flags'
+
+    # Classify objects into small+medium and large based on their box areas
+    areas = box_utils.boxes_area(boxes)
+    sm_objs = areas < cfg.TEST.KPS_AUG.AREA_TH
+    l_objs = areas >= cfg.TEST.KPS_AUG.AREA_TH
+
+    # Combine heatmaps computed under different transformations for each object
+    hms_c = np.zeros_like(hms_ts[0])
+
+    for i in range(hms_c.shape[0]):
+        hms_to_combine = []
+        for hms_t, ds_t, us_t in zip(hms_ts, ds_ts, us_ts):
+            # Discard downscaling predictions for small and medium objects
+            if sm_objs[i] and ds_t:
+                continue
+            # Discard upscaling predictions for large objects
+            if l_objs[i] and us_t:
+                continue
+            hms_to_combine.append(hms_t[i])
+        hms_c[i] = heur_f(hms_to_combine)
+
+    return hms_c
 
 
 def box_results_with_nms_and_limit(scores, boxes):  # NOTE: support single-batch

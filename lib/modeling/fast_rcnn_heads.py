@@ -5,6 +5,7 @@ import torch.nn.init as init
 from torch.autograd import Variable
 
 from core.config import cfg
+import nn as mynn
 import utils.net as net_utils
 
 
@@ -85,9 +86,9 @@ class roi_2mlp_head(nn.Module):
         self._init_weights()
 
     def _init_weights(self):
-        init.xavier_uniform(self.fc1.weight)
+        mynn.init.XavierFill(self.fc1.weight)
         init.constant(self.fc1.bias, 0)
-        init.xavier_uniform(self.fc2.weight)
+        mynn.init.XavierFill(self.fc2.weight)
         init.constant(self.fc2.bias, 0)
 
     def detectron_weight_mapping(self):
