@@ -318,6 +318,7 @@ def main():
         tblogger if args.use_tfboard and not args.no_save else None)
     try:
         logger.info('Training starts !')
+        step = args.start_step
         for step in range(args.start_step, cfg.SOLVER.MAX_ITER):
 
             # Warm up
@@ -374,17 +375,20 @@ def main():
             if (step+1) % CHECKPOINT_PERIOD == 0:
                 save_ckpt(output_dir, args, step, train_size, maskRCNN, optimizer)
 
+        # ---- Training ends ----
         # Save last checkpoint
         save_ckpt(output_dir, args, step, train_size, maskRCNN, optimizer)
 
     except (RuntimeError, KeyboardInterrupt) as e:
-        print('Save on exception:', e)
-        save_ckpt(output_dir, args, step, train_size, maskRCNN, optimizer)
+        has_exception = True
         stack_trace = traceback.format_exc()
         print(stack_trace)
 
     finally:
-        # ---- Training ends ----
+        if locals().get('has_exception'):
+            print('Save on exception')
+            save_ckpt(output_dir, args, step, train_size, maskRCNN, optimizer)
+
         if args.use_tfboard and not args.no_save:
             tblogger.close()
 
