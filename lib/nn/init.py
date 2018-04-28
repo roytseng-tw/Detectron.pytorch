@@ -13,7 +13,7 @@ def XavierFill(tensor):
     size = reduce(operator.mul, tensor.shape, 1)
     fan_in = size / tensor.shape[0]
     scale = math.sqrt(3 / fan_in)
-    init.uniform(tensor, -scale, scale)
+    return init.uniform(tensor, -scale, scale)
 
 
 def MSRAFill(tensor):
@@ -21,4 +21,4 @@ def MSRAFill(tensor):
     size = reduce(operator.mul, tensor.shape, 1)
     fan_out = size / tensor.shape[1]
     scale = math.sqrt(2 / fan_out)
-    init.normal(tensor, 0, scale)
+    return init.normal(tensor, 0, scale)
