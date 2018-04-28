@@ -114,6 +114,7 @@ Tested under python3.
 - python packages
   - pytorch==0.3.1  (cuda80, cudnn7.1.2)
   - torchvision==0.2.0  
+  - cython  
   - numpy  
   - scipy  
   - opencv
