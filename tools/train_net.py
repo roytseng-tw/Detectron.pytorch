@@ -199,8 +199,6 @@ def main():
     if args.lr_decay_gamma is not None:
         cfg.SOLVER.GAMMA = args.lr_decay_gamma
 
-    args.mGPUs = (cfg.NUM_GPUS > 1)
-
     timers = defaultdict(Timer)
 
     ### Dataset ###

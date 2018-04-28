@@ -7,6 +7,7 @@ import torch.nn.functional as F
 from torch.autograd import Variable
 
 from core.config import cfg
+import nn as mynn
 
 logger = logging.getLogger(__name__)
 
@@ -139,7 +140,7 @@ def save_ckpt(output_dir, args, model, optimizer):
     if not os.path.exists(ckpt_dir):
         os.makedirs(ckpt_dir)
     save_name = os.path.join(ckpt_dir, 'model_{}_{}.pth'.format(args.epoch, args.step))
-    if args.mGPUs:
+    if isinstance(model, mynn.DataParallel):
         model = model.module
     # TODO: (maybe) Do not save redundant shared params
     # model_state_dict = model.state_dict()
