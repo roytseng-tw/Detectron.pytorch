@@ -5,6 +5,7 @@ import distutils.util
 import os
 import sys
 import pickle
+import resource
 import traceback
 import logging
 from collections import defaultdict
