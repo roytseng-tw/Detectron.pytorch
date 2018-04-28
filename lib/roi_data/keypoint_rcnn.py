@@ -67,7 +67,7 @@ def add_keypoint_rcnn_blobs(blobs, roidb, fg_rois_per_image, fg_inds, im_scale,
     heats, weights = keypoint_utils.keypoints_to_heatmap_labels(
         sampled_keypoints, sampled_fg_rois)
 
-    shape = (sampled_fg_rois.shape[0] * cfg.KRCNN.NUM_KEYPOINTS, 1)
+    shape = (sampled_fg_rois.shape[0] * cfg.KRCNN.NUM_KEYPOINTS,)
     heats = heats.reshape(shape)
     weights = weights.reshape(shape)
 

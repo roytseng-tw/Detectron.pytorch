@@ -93,16 +93,17 @@ def keypoint_losses(kps_pred, keypoint_locations_int32, keypoint_weights,
     """Mask R-CNN keypoint specific losses."""
     device_id = kps_pred.get_device()
     kps_target = Variable(torch.from_numpy(
-        keypoint_locations_int32.astype('int64').squeeze())).cuda(device_id)
-    keypoint_weights = Variable(torch.from_numpy(keypoint_weights.squeeze())).cuda(device_id)
+        keypoint_locations_int32.astype('int64'))).cuda(device_id)
+    keypoint_weights = Variable(torch.from_numpy(keypoint_weights)).cuda(device_id)
     # Softmax across **space** (woahh....space!)
     # Note: this is not what is commonly called "spatial softmax"
     # (i.e., softmax applied along the channel dimension at each spatial
     # location); This is softmax applied over a set of spatial locations (i.e.,
     # each spatial location is a "class").
-    losses = F.cross_entropy(
+    loss = F.cross_entropy(
         kps_pred.view(-1, cfg.KRCNN.HEATMAP_SIZE**2), kps_target, reduce=False)
-    loss = cfg.KRCNN.LOSS_WEIGHT * torch.sum(losses * keypoint_weights) / torch.sum(keypoint_weights)
+    loss = torch.sum(loss * keypoint_weights) / torch.sum(keypoint_weights)
+    loss *= cfg.KRCNN.LOSS_WEIGHT
 
     if not cfg.KRCNN.NORMALIZE_BY_VISIBLE_KEYPOINTS:
         # Discussion: the softmax loss above will average the loss by the sum of
