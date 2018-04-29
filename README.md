@@ -285,6 +285,29 @@ Architecture specific configuration files are put under [configs](configs/). The
 ## Benchmark
 Benchmark results with Detectron's checkpoints are same as the numbers reported by Detetron.
 
+### faster_rnn
+
+- **tutorial_2gpu_e2e_faster_rcnn_R-50-FPN.yaml**
+
+  Mentioned in Detectron's GETTING_STARTED.md:
+  > Box AP on coco_2014_minival should be around **22.1%** (+/- 0.1% stdev measured over 3 runs)
+
+  Because lack of multiple GPUs for training with larger batch size, this tutorial example is a good for measuring the training from scratch performance.
+
+  - Training command:
+
+    `python tools/train_net_step.py --dataset coco2017 --cfg configs/tutorial_2gpu_e2e_faster_rcnn_R-50-FPN.yaml`
+
+  - Exactly same settings as Detectron.
+  - Results:
+
+    Box
+
+    | AP50:95  | AP50  | AP75  | APs   | APm   | APl   |
+    |:--------:|:-----:|:-----:|:-----:|:-----:|:-----:|
+    | 0.221    | 0.412 | 0.215 | 0.094 | 0.238 | 0.317 |
+
+
 ### mask_rcnn
 - **e2e_mask_rcnn-R-50-FPN_1x**
   - Training command:
@@ -328,8 +351,8 @@ Benchmark results with Detectron's checkpoints are same as the numbers reported 
     | 0.339    | 0.558 | 0.358 | 0.149 | 0.363 | 0.509 |
 
   ![img](demo/loss_e2e_mask_rcnn_R-50-FPN_1x_bs6.jpg)
-  Orange: loss parsed from Detectron's log  
-  Blue + Brown: loss of this training.  
+  Orange: loss parsed from Detectron's log
+  Blue + Brown: loss of this training.
 
 ### keypoint_rcnn
 - **e2e_keypoint_rcnn_R-50-FPN_1x**
@@ -374,5 +397,5 @@ Benchmark results with Detectron's checkpoints are same as the numbers reported 
     | 0.642    | 0.864 | 0.699 | 0.585 | 0.734 |
 
     ![img](demo/loss_e2e_keypoint_rcnn_R-50-FPN_1x_bs8.jpg)
-    Orange: loss of this training.  
-    Blue: loss parsed from Detectron's log  
+    Orange: loss of this training.
+    Blue: loss parsed from Detectron's log
