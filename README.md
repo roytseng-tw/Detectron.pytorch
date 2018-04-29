@@ -295,7 +295,7 @@ Benchmark results with Detectron's checkpoints are same as the numbers reported 
 
   - **Differences** to Detectron:
     - Batch size: 6 vs. 16
-    - Learing rate: 3/8 of the Detectron's learing rate on each step.
+    - Learing rate: 3/8 of the Detectron's learning rate on each step.
     - Number of GPUs: 2 vs. 8
     - Number of Images per GPU: 3 vs. 2
 
@@ -341,7 +341,7 @@ Benchmark results with Detectron's checkpoints are same as the numbers reported 
 
   - **Differences** to Detectron:
     - Batch size: 8 vs. 16
-    - Learing rate: 1/2 of the Detectron's learing rate on each step.
+    - Learing rate: 1/2 of the Detectron's learning rate on each step.
     - Number of GPUs: 2 vs. 8
     - Number of Images per GPU: 4 vs. 2
 
