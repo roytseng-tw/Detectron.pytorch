@@ -35,7 +35,7 @@ This implementation has the following features:
 
 - **It supports three pooling methods**. Notice that only **roi align** is revised to match the implementation in Caffe2. So, use it.
 
-- **It is memory efficient**. For data batching, there are two techiniques available to reduce memory usage: 1) *Aspect grouping*: group images with similar aspect ratio in a batch 2) *Aspect cropping*: crop images that are too long. Aspect grouping is implemented in Detectron, so it's used for default. Aspect cropping is the idea from [jwyang/faster-rcnn.pytorch](https://github.com/jwyang/faster-rcnn.pytorch), and it's not used for default. 
+- **It is memory efficient**. For data batching, there are two techiniques available to reduce memory usage: 1) *Aspect grouping*: group images with similar aspect ratio in a batch 2) *Aspect cropping*: crop images that are too long. Aspect grouping is implemented in Detectron, so it's used for default. Aspect cropping is the idea from [jwyang/faster-rcnn.pytorch](https://github.com/jwyang/faster-rcnn.pytorch), and it's not used for default.
 
   Besides of that, I implement a customized `nn.DataParallel ` module which enables different batch blob size on different gpus. Check [My nn.DataParallel](#my-nndataparallel) section for more details about this.
 
@@ -52,10 +52,10 @@ Tested under python3.
 
 - python packages
   - pytorch==0.3.1  (cuda80, cudnn7.1.2)
-  - torchvision==0.2.0  
-  - cython  
-  - numpy  
-  - scipy  
+  - torchvision==0.2.0
+  - cython
+  - numpy
+  - scipy
   - opencv
   - pyyaml
   - [pycocotools](https://github.com/cocodataset/cocoapi)  — for COCO dataset, also available from pip.
@@ -87,7 +87,7 @@ cd {repo_root}
 mkdir data
 ```
 
-- **COCO**: 
+- **COCO**:
   Download the coco images and annotations from [coco website](http://cocodataset.org/#download).
 
   And make sure to put the files as the following structure:
@@ -129,7 +129,7 @@ I use ImageNet pretrained weights from Caffe for the backbone networks.
 
 Download them and put them into the `{repo_root}/data/pretrained_model`.
 
-You can the following command to download them all: 
+You can the following command to download them all:
 
 - extra required packages: `argparse_color_formater`, `colorama`, `requests`
 
@@ -137,7 +137,7 @@ You can the following command to download them all:
 python tools/download_imagenet_weights.py
 ```
 
-**NOTE**: Caffe pretrained weights have slightly better performance than Pytorch pretrained. Suggest to use Caffe pretrained models from the above link to reproduce the results. By the way, Detectron also use pretrained weights from Caffe. 
+**NOTE**: Caffe pretrained weights have slightly better performance than Pytorch pretrained. Suggest to use Caffe pretrained models from the above link to reproduce the results. By the way, Detectron also use pretrained weights from Caffe.
 
 **If you want to use pytorch pre-trained models, please remember to transpose images from BGR to RGB, and also use the same data preprocessing (minus mean and normalize) as used in Pytorch pretrained model.**
 
@@ -197,7 +197,7 @@ In `train_net_step.py`:
 
 In `train_net.py` some config options have no effects and worth noticing:
 
- - `SOLVER.LR_POLICY`, `SOLVER.MAX_ITER`, `SOLVER.STEPS`,`SOLVER.LRS`:  
+ - `SOLVER.LR_POLICY`, `SOLVER.MAX_ITER`, `SOLVER.STEPS`,`SOLVER.LRS`:
   For now, the training policy is controlled by these command line arguments:
 
     - **`--epochs`**: How many epochs to train. One epoch means one travel through the whole training sets. Defaults to  6.
@@ -205,17 +205,17 @@ In `train_net.py` some config options have no effects and worth noticing:
 
    For more command line arguments, please refer to `python train_net.py --help`
 
-- `SOLVER.WARM_UP_ITERS`, `SOLVER.WARM_UP_FACTOR`, `SOLVER.WARM_UP_METHOD`:  
+- `SOLVER.WARM_UP_ITERS`, `SOLVER.WARM_UP_FACTOR`, `SOLVER.WARM_UP_METHOD`:
   Training warm up is not supported.
 
 ## Inference
 
-### Evaluate the training results  
+### Evaluate the training results
 For example, test mask-rcnn on coco2017 val set
 ```
 python tools/test_net.py --dataset coco2017 --cfg config/e2e_mask_rcnn_R-50-FPN_1x.yaml --load_ckpt {path/to/your/checkpoint}
 ```
-Use `--load_detectron` to load Detectron's checkpoint. If multiple gpus are available, add `--multi-gpu-testing`.  
+Use `--load_detectron` to load Detectron's checkpoint. If multiple gpus are available, add `--multi-gpu-testing`.
 
 Specify a different output directry, use `--output_dir {...}`. Defaults to `{the/parent/dir/of/checkpoint}/test`
 
@@ -228,23 +228,23 @@ python tools/infer_simple.py --dataset coco --cfg cfgs/e2e_mask_rcnn_R-50-C4.yml
 ## Supported Network modules
 
 - Backbone:
-  - ResNet:  
+  - ResNet:
     `ResNet50_conv4_body`,`ResNet50_conv5_body`,
     `ResNet101_Conv4_Body`,`ResNet101_Conv5_Body`,
     `ResNet152_Conv5_Body`
-  - FPN:  
+  - FPN:
     `fpn_ResNet50_conv5_body`,`fpn_ResNet50_conv5_P2only_body`,
     `fpn_ResNet101_conv5_body`,`fpn_ResNet101_conv5_P2only_body`,`fpn_ResNet152_conv5_body`,`fpn_ResNet152_conv5_P2only_body`
 
   ResNeXt is also implemented but not yet tested.
 
-- Box head:  
+- Box head:
   `ResNet_roi_conv5_head`,`roi_2mlp_head`
 
-- Mask head:  
+- Mask head:
   `mask_rcnn_fcn_head_v0upshare`,`mask_rcnn_fcn_head_v0up`, `mask_rcnn_fcn_head_v1up4convs`,`mask_rcnn_fcn_head_v1up`
 
-- Keypoints head:  
+- Keypoints head:
   `roi_pose_head_v1convX`
 
 **NOTE**: the naming is similar to the one used in Detectron. Just remove any prepending `add_`.
@@ -255,7 +255,7 @@ Only COCO is supported for now. However, the whole dataset library implementatio
 
 ## Configuration Options
 
-Architecture specific configuration files are put under [configs](configs/). The general configuration file [lib/core/config.py](lib/core/config.py) **has almost all the options with same default values as in Detectron's**, so it's effortless to transform the architecture specific configs from Detectron. 
+Architecture specific configuration files are put under [configs](configs/). The general configuration file [lib/core/config.py](lib/core/config.py) **has almost all the options with same default values as in Detectron's**, so it's effortless to transform the architecture specific configs from Detectron.
 
 **Some options from Detectron are not used** because the corresponding functionalities are not implemented yet. For example, data augmentation on testing.
 
@@ -276,9 +276,9 @@ Architecture specific configuration files are put under [configs](configs/). The
 
 ## My nn.DataParallel
 
-- **Keep certain keyword inputs on cpu**  
+- **Keep certain keyword inputs on cpu**
   Official DataParallel will broadcast all the input Variables to GPUs. However, many rpn related computations are done in CPU, and it's unnecessary to put those related inputs on GPUs.
-- **Allow Different blob size for different GPU**  
+- **Allow Different blob size for different GPU**
   To save gpu memory, images are padded seperately for each gpu.
 - **Work with returned value of dictionary type**
 
@@ -292,42 +292,45 @@ Benchmark results with Detectron's checkpoints are same as the numbers reported 
   `python tools/train_net_step.py --dataset coco2017 --cfg configs/e2e_mask_rcnn_R-50-FPN_1x.yaml --bs 6`
 
   - Same solver configuration as to Detectron, i.e. same training steps and so on.
-  
+
   - **Differences** to Detectron:
     - Batch size: 6 vs. 16
     - Learing rate: 3/8 of the Detectron's learing rate on each step.
     - Number of GPUs: 2 vs. 8
     - Number of Images per GPU: 3 vs. 2
-  
+
   - Results:
 
     Box
-    
+
     | AP50:95  | AP50  | AP75  | APs   | APm   | APl   |
     |:--------:|:-----:|:-----:|:-----:|:-----:|:-----:|
     | 0.341    | 0.555 | 0.367 | 0.194 | 0.364 | 0.448 |
-    
+
     Mask
-    
+
     | AP50:95  | AP50  | AP75  | APs   | APm   | APl   |
     |:--------:|:-----:|:-----:|:-----:|:-----:|:-----:|
     | 0.311    | 0.521 | 0.325 | 0.139 | 0.332 | 0.463 |
-    
+
   - Detectron:
-    
+
     Box
-    
+
     | AP50:95  | AP50  | AP75  | APs   | APm   | APl   |
     |:--------:|:-----:|:-----:|:-----:|:-----:|:-----:|
     | 0.377    | 0.592 | 0.409 | 0.214 | 0.408 | 0.497 |
-    
+
     Mask
-    
+
     | AP50:95  | AP50  | AP75  | APs   | APm   | APl   |
     |:--------:|:-----:|:-----:|:-----:|:-----:|:-----:|
     | 0.339    | 0.558 | 0.358 | 0.149 | 0.363 | 0.509 |
-    
-    
+
+  ![img](demo/loss_e2e_mask_rcnn_R-50-FPN_1x_bs6.jpg)
+  Orange: loss parsed from Detectron's log  
+  Blue + Brown: loss of this training.  
+
 ### keypoint_rcnn
 - **e2e_keypoint_rcnn_R-50-FPN_1x**
   - Training command:
@@ -345,17 +348,17 @@ Benchmark results with Detectron's checkpoints are same as the numbers reported 
   - Results:
 
     Box
-    
+
     | AP50:95  | AP50  | AP75  | APm   | APl   |
     |:--------:|:-----:|:-----:|:-----:|:-----:|
     | 0.520    | 0.815 | 0.566 | 0.352 | 0.597 |
 
     Keypoint
-    
+
     | AP50:95  | AP50  | AP75  | APm   | APl   |
     |:--------:|:-----:|:-----:|:-----:|:-----:|
     | 0.623    | 0.853 | 0.673 | 0.570 | 0.710 |
-    
+
   - Detectron:
 
     Box
@@ -370,12 +373,6 @@ Benchmark results with Detectron's checkpoints are same as the numbers reported 
     |:--------:|:-----:|:-----:|:-----:|:-----:|
     | 0.642    | 0.864 | 0.699 | 0.585 | 0.734 |
 
-## Visualization
-
-- Train *e2e_mask_rcnn_R-50_C4* from scratch for 1 epoch on coco_train_2017 with batch size 4:
-
-  <img src="demo/e2e_mask_rcnn_R-50-C4/train_from_scratch_epoch1_bs4/img1.jpg" height="500px"/>
-  <img src="demo/e2e_mask_rcnn_R-50-C4/train_from_scratch_epoch1_bs4/img2.jpg" height="500px"/>
-  <img src="demo/e2e_mask_rcnn_R-50-C4/train_from_scratch_epoch1_bs4/img3.jpg" height="500px"/>
-  <img src="demo/e2e_mask_rcnn_R-50-C4/train_from_scratch_epoch1_bs4/img4.jpg" height="500px"/>
-
+    ![img](demo/loss_e2e_keypoint_rcnn_R-50-FPN_1x_bs8.jpg)
+    Orange: loss of this training.  
+    Blue: loss parsed from Detectron's log  
