@@ -248,26 +248,61 @@ python tools/infer_simple.py --dataset coco --cfg cfgs/e2e_mask_rcnn_R-50-C4.yml
 
 ## Benchmark
 
+### mask_rcnn
+- **e2e_mask_rcnn-R-50-FPN_1x**
+  - Training command: `python tools/train_net_step.py --dataset coco2017 --cfg configs/e2e_mask_rcnn_R-50-FPN_1x.yaml --bs 6`
+  - Same solver configuration as to Detectron, i.e. same training steps and so on.
+  - **Differences** to Detectron:
+    - Batch size: 6 vs. 16
+    - Learing rate: 3/8 of the Detectron's learing rate on each step.
+    - Number of GPUs: 2 vs. 8
+    - Number of Images per GPU: 3 vs. 2
+  - Results:
+    - Box
+      | AP50:95  | AP50  | AP75  | APs   | APm   | APl   |
+      |:--------:|:-----:|:-----:|:-----:|:-----:|:-----:|
+      | 0.341    | 0.555 | 0.367 | 0.194 | 0.364 | 0.448 |
+    - Mask
+      | AP50:95  | AP50  | AP75  | APs   | APm   | APl   |
+      |:--------:|:-----:|:-----:|:-----:|:-----:|:-----:|
+      | 0.311    | 0.521 | 0.325 | 0.139 | 0.332 | 0.463 |
+  - Detectron:
+    - Box
+      | AP50:95  | AP50  | AP75  | APs   | APm   | APl   |
+      |:--------:|:-----:|:-----:|:-----:|:-----:|:-----:|
+      | 0.377    | 0.592 | 0.409 | 0.214 | 0.408 | 0.497 |
+    - Mask
+      | AP50:95  | AP50  | AP75  | APs   | APm   | APl   |
+      |:--------:|:-----:|:-----:|:-----:|:-----:|:-----:|
+      | 0.339    | 0.558 | 0.358 | 0.149 | 0.363 | 0.509 |
+
 ### keypoint_rcnn
-- e2e_keypoint_rcnn_R-50-FPN
-  - Training command: `python tools/train_net.py --dataset keypoints_coco2017 --cfg configs/e2e_keypoint_rcnn_R-50-FPN.yaml --bs 8`  
-    Trained for 6 epochs with batch size 8, and decay the lr by 0.1 on the start of 5th and 6th epoch. There are floor(113198 / 8) = 14149 iterations per epoch.
-  
-    Dataset: keypoints_coco_2017_val  
-    Task: box
-
-    | AP            | AP50   | AP75   | APs    | APm    | APl    |
-    |---------------|--------|--------|--------|--------|--------|
-    | 0.5201 (0.536)| 0.8169 | 0.5638 | 0.3494 | 0.5995 | 0.6812 |
-    
-    Task: keypoint
-    
-    | AP            | AP50   | AP75   | APm    | APl    |
-    |---------------|--------|--------|--------|--------|
-    | 0.6204 (0.642)| 0.8523 | 0.6730 |0.5700  | 0.7028 |
-    
-  - The values in parentheses are **AP** of Detectron's `e2e_keypoint_rcnn_R-50-FPN_1x`, which is trained for 90000 iterations with batch size 16, and decay the lr by 0.1 after 60000th and 80000th iteration.
-
+- **e2e_keypoint_rcnn_R-50-FPN_1x**
+  - Training command: `python tools/train_net_step.py --dataset keypoints_coco201 --cfg configs/e2e_keypoint_rcnn_R-50-FPN_1x.yaml --bs 8`
+  - Same solver configuration as to Detectron, i.e. same training steps and so on.
+  - **Differences** to Detectron:
+    - Batch size: 8 vs. 16
+    - Learing rate: 1/2 of the Detectron's learing rate on each step.
+    - Number of GPUs: 2 vs. 8
+    - Number of Images per GPU: 4 vs. 2
+  - Results:
+    - Box
+      | AP50:95  | AP50  | AP75  | APm   | APl   |
+      |:--------:|:-----:|:-----:|:-----:|:-----:|
+      | 0.520    | 0.815 | 0.566 | 0.352 | 0.597 |
+    - Keypoint
+      | AP50:95  | AP50  | AP75  | APm   | APl   |
+      |:--------:|:-----:|:-----:|:-----:|:-----:|
+      | 0.623    | 0.853 | 0.673 | 0.570 | 0.710 |
+  - Detectron:
+    - Box
+      | AP50:95  | AP50  | AP75  | APm   | APl   |
+      |:--------:|:-----:|:-----:|:-----:|:-----:|
+      | 0.536    | 0.828 | 0.583 | 0.365 | 0.612 |
+    - Keypoint
+      | AP50:95  | AP50  | AP75  | APm   | APl   |
+      |:--------:|:-----:|:-----:|:-----:|:-----:|
+      | 0.642    | 0.864 | 0.699 | 0.585 | 0.734 |
 
 ## Visualization
 
