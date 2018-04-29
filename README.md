@@ -42,7 +42,7 @@ This implementation has the following features:
 ## Getting Started
 Clone the repo:
 
-```console
+```
 git clone https://github.com/roytseng-tw/mask-rcnn.pytorch.git
 ```
 
@@ -67,7 +67,7 @@ Tested under python3.
 
 Compile the CUDA code:
 
-```console
+```
 cd lib  # please change to this directory
 sh make.sh
 ```
@@ -82,7 +82,7 @@ Note that, If you use `CUDA_VISIBLE_DEVICES` to set gpus, **make sure at least o
 
 Create a data folder under the repo,
 
-```console
+```
 cd {repo_root}
 mkdir data
 ```
@@ -114,7 +114,7 @@ mkdir data
 
    Feel free to put the dataset at any place you want, and then soft link the dataset under the `data/` folder:
 
-   ```console
+   ```
    ln -s path/to/coco data/coco
    ```
 
@@ -131,9 +131,9 @@ Download them and put them into the `{repo_root}/data/pretrained_model`.
 
 You can the following command to download them all: 
 
-​	- extra required packages: `argparse_color_formater`, `colorama`, `requests`
+- extra required packages: `argparse_color_formater`, `colorama`, `requests`
 
-```console
+```
 python tools/download_imagenet_weights.py
 ```
 
@@ -145,7 +145,7 @@ python tools/download_imagenet_weights.py
 
 ### Train from scratch
 Take mask-rcnn with res50 backbone for example.
-```console
+```
 python tools/train_net_step.py --dataset coco2017 --cfg configs/e2e_mask_rcnn_R-50-C4.yml --use_tfboard --bs {batch_size} --nw {num_workers}
 ```
 
@@ -156,16 +156,16 @@ Specify `—-use_tfboard` to log the losses on Tensorboard.
 **NOTE**: use `--dataset keypoints_coco2017` when training for keypoint-rcnn.
 
 ### Finetune from a pretrained checkpoint
-```console
+```
 python tools/train_net_step.py ... --load_ckpt {path/to/the/checkpoint}
 ```
 or using Detectron's checkpoint file
-```console
+```
 python tools/train_net_step.py ... --load_detectron {path/to/the/checkpoint}
 ```
 
 ### Resume training with the same dataset and batch size
-```console
+```
 python tools/train_net_step.py ... --load_ckpt {path/to/the/checkpoint} --resume
 ```
 When resume the training, **step count** and **optimizer state** will also be restored from the checkpoint. For SGD optimizer, optimizer state contains the momentum for each trainable parameter.
@@ -173,17 +173,17 @@ When resume the training, **step count** and **optimizer state** will also be re
 **NOTE**: `--resume` is not yet supported for `--load_detectron`
 
 ### Set config options in command line
-```console
+```
   python tools/train_net_step.py ... --no_save --set {config.name1} {value1} {config.name2} {value2} ...
 ```
 - For Example, run for debugging.
-  ```console
+  ```
   python tools/train_net_step.py ... --no_save --set DEBUG True
   ```
   Load less annotations to accelarate training progress. Add `--no_save` to avoid saving any checkpoint or logging.
 
 ### Show command line help messages
-```console
+```
 python train_net_step.py --help
 ```
 
@@ -212,7 +212,7 @@ In `train_net.py` some config options have no effects and worth noticing:
 
 ### Evaluate the training results  
 For example, test mask-rcnn on coco2017 val set
-```console
+```
 python tools/test_net.py --dataset coco2017 --cfg config/e2e_mask_rcnn_R-50-FPN_1x.yaml --load_ckpt {path/to/your/checkpoint}
 ```
 Use `--load_detectron` to load Detectron's checkpoint. If multiple gpus are available, add `--multi-gpu-testing`.  
@@ -220,7 +220,7 @@ Use `--load_detectron` to load Detectron's checkpoint. If multiple gpus are avai
 Specify a different output directry, use `--output_dir {...}`. Defaults to `{the/parent/dir/of/checkpoint}/test`
 
 ### Visualize the training results on images
-```console
+```
 python tools/infer_simple.py --dataset coco --cfg cfgs/e2e_mask_rcnn_R-50-C4.yml --load_ckpt {path/to/your/checkpoint} --image_dir {dir/of/input/images}  --output_dir {dir/to/save/visualizations}
 ```
 `--output_dir` defaults to `infer_outputs`.
@@ -283,62 +283,92 @@ Architecture specific configuration files are put under [configs](configs/). The
 - **Work with returned value of dictionary type**
 
 ## Benchmark
+Benchmark results with Detectron's checkpoints are same as the numbers reported by Detetron.
 
 ### mask_rcnn
 - **e2e_mask_rcnn-R-50-FPN_1x**
-  - Training command: `python tools/train_net_step.py --dataset coco2017 --cfg configs/e2e_mask_rcnn_R-50-FPN_1x.yaml --bs 6`
+  - Training command:
+
+  `python tools/train_net_step.py --dataset coco2017 --cfg configs/e2e_mask_rcnn_R-50-FPN_1x.yaml --bs 6`
+
   - Same solver configuration as to Detectron, i.e. same training steps and so on.
+  
   - **Differences** to Detectron:
     - Batch size: 6 vs. 16
     - Learing rate: 3/8 of the Detectron's learing rate on each step.
     - Number of GPUs: 2 vs. 8
     - Number of Images per GPU: 3 vs. 2
+  
   - Results:
-    - Box
-      | AP50:95  | AP50  | AP75  | APs   | APm   | APl   |
-      |:--------:|:-----:|:-----:|:-----:|:-----:|:-----:|
-      | 0.341    | 0.555 | 0.367 | 0.194 | 0.364 | 0.448 |
-    - Mask
-      | AP50:95  | AP50  | AP75  | APs   | APm   | APl   |
-      |:--------:|:-----:|:-----:|:-----:|:-----:|:-----:|
-      | 0.311    | 0.521 | 0.325 | 0.139 | 0.332 | 0.463 |
-  - Detectron:
-    - Box
-      | AP50:95  | AP50  | AP75  | APs   | APm   | APl   |
-      |:--------:|:-----:|:-----:|:-----:|:-----:|:-----:|
-      | 0.377    | 0.592 | 0.409 | 0.214 | 0.408 | 0.497 |
-    - Mask
-      | AP50:95  | AP50  | AP75  | APs   | APm   | APl   |
-      |:--------:|:-----:|:-----:|:-----:|:-----:|:-----:|
-      | 0.339    | 0.558 | 0.358 | 0.149 | 0.363 | 0.509 |
 
+    Box
+    
+    | AP50:95  | AP50  | AP75  | APs   | APm   | APl   |
+    |:--------:|:-----:|:-----:|:-----:|:-----:|:-----:|
+    | 0.341    | 0.555 | 0.367 | 0.194 | 0.364 | 0.448 |
+    
+    Mask
+    
+    | AP50:95  | AP50  | AP75  | APs   | APm   | APl   |
+    |:--------:|:-----:|:-----:|:-----:|:-----:|:-----:|
+    | 0.311    | 0.521 | 0.325 | 0.139 | 0.332 | 0.463 |
+    
+  - Detectron:
+    
+    Box
+    
+    | AP50:95  | AP50  | AP75  | APs   | APm   | APl   |
+    |:--------:|:-----:|:-----:|:-----:|:-----:|:-----:|
+    | 0.377    | 0.592 | 0.409 | 0.214 | 0.408 | 0.497 |
+    
+    Mask
+    
+    | AP50:95  | AP50  | AP75  | APs   | APm   | APl   |
+    |:--------:|:-----:|:-----:|:-----:|:-----:|:-----:|
+    | 0.339    | 0.558 | 0.358 | 0.149 | 0.363 | 0.509 |
+    
+    
 ### keypoint_rcnn
 - **e2e_keypoint_rcnn_R-50-FPN_1x**
-  - Training command: `python tools/train_net_step.py --dataset keypoints_coco201 --cfg configs/e2e_keypoint_rcnn_R-50-FPN_1x.yaml --bs 8`
+  - Training command:
+
+  `python tools/train_net_step.py --dataset keypoints_coco201 --cfg configs/e2e_keypoint_rcnn_R-50-FPN_1x.yaml --bs 8`
+
   - Same solver configuration as to Detectron, i.e. same training steps and so on.
+
   - **Differences** to Detectron:
     - Batch size: 8 vs. 16
     - Learing rate: 1/2 of the Detectron's learing rate on each step.
     - Number of GPUs: 2 vs. 8
     - Number of Images per GPU: 4 vs. 2
+
   - Results:
-    - Box
-      | AP50:95  | AP50  | AP75  | APm   | APl   |
-      |:--------:|:-----:|:-----:|:-----:|:-----:|
-      | 0.520    | 0.815 | 0.566 | 0.352 | 0.597 |
-    - Keypoint
-      | AP50:95  | AP50  | AP75  | APm   | APl   |
-      |:--------:|:-----:|:-----:|:-----:|:-----:|
-      | 0.623    | 0.853 | 0.673 | 0.570 | 0.710 |
+
+    Box
+    
+    | AP50:95  | AP50  | AP75  | APm   | APl   |
+    |:--------:|:-----:|:-----:|:-----:|:-----:|
+    | 0.520    | 0.815 | 0.566 | 0.352 | 0.597 |
+
+    Keypoint
+    
+    | AP50:95  | AP50  | AP75  | APm   | APl   |
+    |:--------:|:-----:|:-----:|:-----:|:-----:|
+    | 0.623    | 0.853 | 0.673 | 0.570 | 0.710 |
+    
   - Detectron:
-    - Box
-      | AP50:95  | AP50  | AP75  | APm   | APl   |
-      |:--------:|:-----:|:-----:|:-----:|:-----:|
-      | 0.536    | 0.828 | 0.583 | 0.365 | 0.612 |
-    - Keypoint
-      | AP50:95  | AP50  | AP75  | APm   | APl   |
-      |:--------:|:-----:|:-----:|:-----:|:-----:|
-      | 0.642    | 0.864 | 0.699 | 0.585 | 0.734 |
+
+    Box
+
+    | AP50:95  | AP50  | AP75  | APm   | APl   |
+    |:--------:|:-----:|:-----:|:-----:|:-----:|
+    | 0.536    | 0.828 | 0.583 | 0.365 | 0.612 |
+
+    Keypoint
+
+    | AP50:95  | AP50  | AP75  | APm   | APl   |
+    |:--------:|:-----:|:-----:|:-----:|:-----:|
+    | 0.642    | 0.864 | 0.699 | 0.585 | 0.734 |
 
 ## Visualization
 
