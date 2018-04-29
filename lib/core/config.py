@@ -915,7 +915,7 @@ __C.EPS = 1e-14
 __C.ROOT_DIR = osp.abspath(osp.join(osp.dirname(__file__), '..', '..'))
 
 # Output basedir
-__C.OUTPUT_DIR = '/tmp'
+__C.OUTPUT_DIR = 'Outputs'
 
 # Name (or path to) the matlab executable
 __C.MATLAB = 'matlab'

@@ -115,12 +115,6 @@ def parse_args():
         help='resume to training on a checkpoint',
         action='store_true')
 
-    # Checkpoint and Logging
-    parser.add_argument(
-        '--output_base_dir',
-        help='Output base directory',
-        default="Outputs")
-
     parser.add_argument(
         '--no_save', help='do not save anything', action='store_true')
 
