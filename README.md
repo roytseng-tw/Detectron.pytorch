@@ -285,7 +285,7 @@ Architecture specific configuration files are put under [configs](configs/). The
 ## Benchmark
 Benchmark results with Detectron's checkpoints are same as the numbers reported by Detetron.
 
-### faster_rnn
+### faster_rcnn
 
 - **tutorial_2gpu_e2e_faster_rcnn_R-50-FPN.yaml**
 
