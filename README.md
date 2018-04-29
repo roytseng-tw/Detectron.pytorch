@@ -292,7 +292,7 @@ Benchmark results with Detectron's checkpoints are same as the numbers reported 
   Mentioned in Detectron's GETTING_STARTED.md:
   > Box AP on coco_2014_minival should be around **22.1%** (+/- 0.1% stdev measured over 3 runs)
 
-  Because lack of multiple GPUs for training with larger batch size, this tutorial example is a good for measuring the training from scratch performance.
+  Because lack of multiple GPUs for training with larger batch size, this tutorial example is a good example for measuring the training from scratch performance.
 
   - Training command:
 
@@ -312,7 +312,7 @@ Benchmark results with Detectron's checkpoints are same as the numbers reported 
 - **e2e_mask_rcnn-R-50-FPN_1x**
   - Training command:
 
-  `python tools/train_net_step.py --dataset coco2017 --cfg configs/e2e_mask_rcnn_R-50-FPN_1x.yaml --bs 6`
+    `python tools/train_net_step.py --dataset coco2017 --cfg configs/e2e_mask_rcnn_R-50-FPN_1x.yaml --bs 6`
 
   - Same solver configuration as to Detectron, i.e. same training steps and so on.
 
@@ -358,7 +358,7 @@ Benchmark results with Detectron's checkpoints are same as the numbers reported 
 - **e2e_keypoint_rcnn_R-50-FPN_1x**
   - Training command:
 
-  `python tools/train_net_step.py --dataset keypoints_coco201 --cfg configs/e2e_keypoint_rcnn_R-50-FPN_1x.yaml --bs 8`
+    `python tools/train_net_step.py --dataset keypoints_coco201 --cfg configs/e2e_keypoint_rcnn_R-50-FPN_1x.yaml --bs 8`
 
   - Same solver configuration as to Detectron, i.e. same training steps and so on.
 
