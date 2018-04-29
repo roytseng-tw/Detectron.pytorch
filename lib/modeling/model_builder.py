@@ -203,6 +203,7 @@ class Generalized_RCNN(nn.Module):
                 return_dict['losses']['loss_kps'] = loss_keypoints
         else:
             # Testing
+            return_dict['rois'] = rpn_ret['rois']
             return_dict['cls_score'] = cls_score
             return_dict['bbox_pred'] = bbox_pred
 
