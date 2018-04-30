@@ -311,7 +311,7 @@ Benchmark results with Detectron's checkpoints are same as the numbers reported 
 ### mask_rcnn
 - **e2e_mask_rcnn-R-50-FPN_1x with 4 x M40**
 
-  Trained on commit 3405283698c8abb29c4f585689588229598d58a0, before changing the Xavier initialization implementation.
+  Trained on commit [3405283](https://github.com/roytseng-tw/Detectron.pytorch/commit/3405283698c8abb29c4f585689588229598d58a0), before changing the Xavier initialization implementation.
 
   - Training command:
 
