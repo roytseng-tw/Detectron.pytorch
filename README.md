@@ -309,7 +309,53 @@ Benchmark results with Detectron's checkpoints are same as the numbers reported 
 
 
 ### mask_rcnn
-- **e2e_mask_rcnn-R-50-FPN_1x**
+- **e2e_mask_rcnn-R-50-FPN_1x with 4 x M40**
+
+  Trained on commit 3405283698c8abb29c4f585689588229598d58a0, before changing the Xavier initialization implementation.
+
+  - Training command:
+
+    `python tools/train_net_step.py --dataset coco2017 --cfg configs/e2e_mask_rcnn_R-50-FPN_1x.yaml`
+
+  - Same batch size and learning rate.
+
+  - **Differences** to Detectron:
+    - Number of GPUs: 4 vs. 8
+    - Number of Images per GPU: 4 vs. 2 (will slightly affect image padding)
+
+  - Results:
+
+    Box
+
+    | AP50:95  | AP50  | AP75  | APs   | APm   | APl   |
+    |:--------:|:-----:|:-----:|:-----:|:-----:|:-----:|
+    | 0.374    | 0.587 | 0.407 | 0.209 | 0.400 | 0.494 |
+
+    Mask
+
+    | AP50:95  | AP50  | AP75  | APs   | APm   | APl   |
+    |:--------:|:-----:|:-----:|:-----:|:-----:|:-----:|
+    | 0.337    | 0.553 | 0.358 | 0.149 | 0.360 | 0.506 |
+
+  - Detectron:
+
+    Box
+
+    | AP50:95  | AP50  | AP75  | APs   | APm   | APl   |
+    |:--------:|:-----:|:-----:|:-----:|:-----:|:-----:|
+    | 0.377    | 0.592 | 0.409 | 0.214 | 0.408 | 0.497 |
+
+    Mask
+
+    | AP50:95  | AP50  | AP75  | APs   | APm   | APl   |
+    |:--------:|:-----:|:-----:|:-----:|:-----:|:-----:|
+    | 0.339    | 0.558 | 0.358 | 0.149 | 0.363 | 0.509 |
+
+  ![img](demo/loss_e2e_mask_rcnn_R-50-FPN_1x_bs16.jpg)
+  Green: loss of this training.  
+  Orange: loss parsed from Detectron's log
+
+- **e2e_mask_rcnn-R-50-FPN_1x with 2 x 1080ti**
   - Training command:
 
     `python tools/train_net_step.py --dataset coco2017 --cfg configs/e2e_mask_rcnn_R-50-FPN_1x.yaml --bs 6`
@@ -351,7 +397,7 @@ Benchmark results with Detectron's checkpoints are same as the numbers reported 
     | 0.339    | 0.558 | 0.358 | 0.149 | 0.363 | 0.509 |
 
   ![img](demo/loss_e2e_mask_rcnn_R-50-FPN_1x_bs6.jpg)
-  Orange: loss parsed from Detectron's log
+  Orange: loss parsed from Detectron's log  
   Blue + Brown: loss of this training.
 
 ### keypoint_rcnn
@@ -397,5 +443,5 @@ Benchmark results with Detectron's checkpoints are same as the numbers reported 
     | 0.642    | 0.864 | 0.699 | 0.585 | 0.734 |
 
     ![img](demo/loss_e2e_keypoint_rcnn_R-50-FPN_1x_bs8.jpg)
-    Orange: loss of this training.
+    Orange: loss of this training.  
     Blue: loss parsed from Detectron's log
