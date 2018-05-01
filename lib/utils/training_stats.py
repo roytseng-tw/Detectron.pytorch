@@ -74,13 +74,14 @@ class TrainingStats(object):
             loss_data = loss.data[0]
             self.smoothed_losses[k].AddValue(loss_data)
             model_out['losses'][k] = loss
-            if k.startswith('loss_rpn_cls'):
-                loss_rpn_cls_value += loss_data
-            elif k.startswith('loss_rpn_bbox'):
-                loss_rpn_bbox_value += loss_data
-        
+            if cfg.FPN.FPN_ON:
+                if k.startswith('loss_rpn_cls_'):
+                    loss_rpn_cls_value += loss_data
+                elif k.startswith('loss_rpn_bbox_'):
+                    loss_rpn_bbox_value += loss_data
+
         self.smoothed_total_loss.AddValue(total_loss.data[0])
-        model_out['total_loss'] = total_loss
+        model_out['total_loss'] = total_loss  # Add the total loss for back propagation
         if cfg.FPN.FPN_ON:
             self.smoothed_losses['loss_rpn_cls'].AddValue(loss_rpn_cls_value)
             self.smoothed_losses['loss_rpn_bbox'].AddValue(loss_rpn_bbox_value)
@@ -88,8 +89,6 @@ class TrainingStats(object):
         for k, metric in model_out['metrics'].items():
             metric = metric.mean(dim=0)
             self.smoothed_metrics[k].AddValue(metric.data[0])
-            model_out['metrics'][k] = metric
-
 
     def LogIterStats(self, cur_iter, lr):
         """Log the tracked statistics."""
