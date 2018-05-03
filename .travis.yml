@@ -4,12 +4,10 @@ cache: pip
 python:
     - 3.6
     #- nightly
-    #- pypy
     #- pypy3
 matrix:
     allow_failures:
         - python: nightly
-        - python: pypy
         - python: pypy3
 install:
     #- pip install -r requirements.txt
