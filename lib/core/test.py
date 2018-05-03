@@ -63,7 +63,8 @@ def im_detect_all(model, im, box_proposals=None, timers=None):
 
     timers['im_detect_bbox'].tic()
     if cfg.TEST.BBOX_AUG.ENABLED:
-        scores, boxes, im_scale, blob_conv = im_detect_bbox_aug(model, im, box_proposals)
+        raise NotImplementedError
+        # scores, boxes, im_scale, blob_conv = im_detect_bbox_aug(model, im, box_proposals)
     else:
         scores, boxes, im_scale, blob_conv = im_detect_bbox(
             model, im, cfg.TEST.SCALE, cfg.TEST.MAX_SIZE, box_proposals)
@@ -80,7 +81,8 @@ def im_detect_all(model, im, box_proposals=None, timers=None):
     if cfg.MODEL.MASK_ON and boxes.shape[0] > 0:
         timers['im_detect_mask'].tic()
         if cfg.TEST.MASK_AUG.ENABLED:
-            masks = im_detect_mask_aug(model, im, boxes, blob_conv)
+            raise NotImplementedError
+            # masks = im_detect_mask_aug(model, im, boxes, blob_conv)
         else:
             masks = im_detect_mask(model, im_scale, boxes, blob_conv)
         timers['im_detect_mask'].toc()
@@ -94,7 +96,8 @@ def im_detect_all(model, im, box_proposals=None, timers=None):
     if cfg.MODEL.KEYPOINTS_ON and boxes.shape[0] > 0:
         timers['im_detect_keypoints'].tic()
         if cfg.TEST.KPS_AUG.ENABLED:
-            heatmaps = im_detect_keypoints_aug(model, im, boxes, blob_conv)
+            raise NotImplementedError
+            # heatmaps = im_detect_keypoints_aug(model, im, boxes, blob_conv)
         else:
             heatmaps = im_detect_keypoints(model, im_scale, boxes, blob_conv)
         timers['im_detect_keypoints'].toc()
