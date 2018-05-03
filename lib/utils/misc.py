@@ -1,8 +1,8 @@
 import os
 import socket
 from collections import defaultdict, Iterable
-from datetime import datetime
 from copy import deepcopy
+from datetime import datetime
 from itertools import chain
 
 import torch

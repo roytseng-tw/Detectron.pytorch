@@ -332,14 +332,12 @@ def main():
 
                 training_stats.IterTic()
                 net_outputs = maskRCNN(**input_data)
-                training_stats.IterToc()
-
                 training_stats.UpdateIterStats(net_outputs)
-
                 loss = net_outputs['total_loss']
                 optimizer.zero_grad()
                 loss.backward()
                 optimizer.step()
+                training_stats.IterToc()
 
                 if (args.step+1) % ckpt_interval_per_epoch == 0:
                     net_utils.save_ckpt(output_dir, args, maskRCNN, optimizer)

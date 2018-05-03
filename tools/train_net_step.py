@@ -72,6 +72,10 @@ def parse_args():
         '--nw', dest='num_workers',
         help='Explicitly specify to overwrite number of workers to load data. Defaults to 4',
         type=int)
+    parser.add_argument(
+        '--iter_size',
+        help='Update once every iter_size steps, as in Caffe.',
+        default=1, type=int)
 
     parser.add_argument(
         '--o', dest='optimizer', help='Training optimizer.',
@@ -167,15 +171,19 @@ def main():
     assert (args.batch_size % cfg.NUM_GPUS) == 0, \
         'batch_size: %d, NUM_GPUS: %d' % (args.batch_size, cfg.NUM_GPUS)
     cfg.TRAIN.IMS_PER_BATCH = args.batch_size // cfg.NUM_GPUS
-    print('Batch size change from {} (in config file) to {}'.format(
-        original_batch_size, args.batch_size))
-    print('NUM_GPUs: %d, TRAIN.IMS_PER_BATCH: %d' % (cfg.NUM_GPUS, cfg.TRAIN.IMS_PER_BATCH))
+    effective_batch_size = args.iter_size * args.batch_size
+    print('Effective Batch size (batch_size X iter_size) change from {} (in config file) to {}'.format(
+        original_batch_size, effective_batch_size))
+    print('NUM_GPUs: %d, TRAIN.IMS_PER_BATCH: %d, iter_size: %d' %
+          (cfg.NUM_GPUS, cfg.TRAIN.IMS_PER_BATCH, args.iter_size))
 
     if args.num_workers is not None:
         cfg.DATA_LOADER.NUM_THREADS = args.num_workers
     print('Number of data loading threads: %d' % cfg.DATA_LOADER.NUM_THREADS)
 
     ### Adjust learning based on batch size change linearly
+    # For iter_size > 1, gradients are `accumulated`, so lr is scaled based
+    # on batch_size instead of effective_batch_size
     old_base_lr = cfg.SOLVER.BASE_LR
     cfg.SOLVER.BASE_LR *= args.batch_size / original_batch_size
     print('Adjust BASE_LR linearly according to batch size change: {} --> {}'.format(
@@ -344,27 +352,27 @@ def main():
                 assert lr == lr_new
                 decay_steps_ind += 1
 
-            try:
-                input_data = next(dataiterator)
-            except StopIteration:
-                dataiterator = iter(dataloader)
-                input_data = next(dataiterator)
-
-            for key in input_data:
-                if key != 'roidb': # roidb is a list of ndarrays with inconsistent length
-                    input_data[key] = list(map(Variable, input_data[key]))
-
             training_stats.IterTic()
-            net_outputs = maskRCNN(**input_data)
+            optimizer.zero_grad()
+            for inner_iter in range(args.iter_size):
+                try:
+                    input_data = next(dataiterator)
+                except StopIteration:
+                    dataiterator = iter(dataloader)
+                    input_data = next(dataiterator)
+
+                for key in input_data:
+                    if key != 'roidb': # roidb is a list of ndarrays with inconsistent length
+                        input_data[key] = list(map(Variable, input_data[key]))
+
+                net_outputs = maskRCNN(**input_data)
+                training_stats.UpdateIterStats(net_outputs, inner_iter)
+                loss = net_outputs['total_loss']
+                loss.backward()
+            optimizer.step()
             training_stats.IterToc()
 
-            training_stats.UpdateIterStats(net_outputs)
             training_stats.LogIterStats(step, lr)
-
-            loss = net_outputs['total_loss']
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
 
             if (step+1) % CHECKPOINT_PERIOD == 0:
                 save_ckpt(output_dir, args, step, train_size, maskRCNN, optimizer)

@@ -50,6 +50,13 @@ class TrainingStats(object):
         self.smoothed_losses = defaultdict(create_smoothed_value)
         self.smoothed_metrics = defaultdict(create_smoothed_value)
         self.smoothed_total_loss = SmoothedValue(self.WIN_SZ)
+        # For the support of args.iter_size
+        self.inner_total_loss = []
+        self.inner_losses = defaultdict(list)
+        if cfg.FPN.FPN_ON:
+            self.inner_loss_rpn_cls = []
+            self.inner_loss_rpn_bbox = []
+        self.inner_metrics = defaultdict(list)
 
     def IterTic(self):
         self.iter_timer.tic()
@@ -60,35 +67,110 @@ class TrainingStats(object):
     def ResetIterTimer(self):
         self.iter_timer.reset()
 
-    def UpdateIterStats(self, model_out):
+    def UpdateIterStats(self, model_out, inner_iter=None):
         """Update tracked iteration statistics."""
+        if inner_iter is not None and self.misc_args.iter_size > 1:
+            # For the case of using args.iter_size > 1
+            return self._UpdateIterStats_inner(model_out, inner_iter)
+
+        # Following code is saved for compatability of train_net.py and iter_size==1
         total_loss = 0
         if cfg.FPN.FPN_ON:
-            loss_rpn_cls_value = 0
-            loss_rpn_bbox_value = 0
+            loss_rpn_cls_data = 0
+            loss_rpn_bbox_data = 0
 
         for k, loss in model_out['losses'].items():
             assert loss.shape[0] == cfg.NUM_GPUS
             loss = loss.mean(dim=0)
             total_loss += loss
             loss_data = loss.data[0]
-            self.smoothed_losses[k].AddValue(loss_data)
             model_out['losses'][k] = loss
             if cfg.FPN.FPN_ON:
                 if k.startswith('loss_rpn_cls_'):
-                    loss_rpn_cls_value += loss_data
+                    loss_rpn_cls_data += loss_data
                 elif k.startswith('loss_rpn_bbox_'):
-                    loss_rpn_bbox_value += loss_data
+                    loss_rpn_bbox_data += loss_data
+            self.smoothed_losses[k].AddValue(loss_data)
 
-        self.smoothed_total_loss.AddValue(total_loss.data[0])
         model_out['total_loss'] = total_loss  # Add the total loss for back propagation
+        self.smoothed_total_loss.AddValue(total_loss.data[0])
         if cfg.FPN.FPN_ON:
-            self.smoothed_losses['loss_rpn_cls'].AddValue(loss_rpn_cls_value)
-            self.smoothed_losses['loss_rpn_bbox'].AddValue(loss_rpn_bbox_value)
+            self.smoothed_losses['loss_rpn_cls'].AddValue(loss_rpn_cls_data)
+            self.smoothed_losses['loss_rpn_bbox'].AddValue(loss_rpn_bbox_data)
 
         for k, metric in model_out['metrics'].items():
             metric = metric.mean(dim=0)
             self.smoothed_metrics[k].AddValue(metric.data[0])
+
+    def _UpdateIterStats_inner(self, model_out, inner_iter):
+        """Update tracked iteration statistics for the case of iter_size > 1"""
+        assert inner_iter < self.misc_args.iter_size
+
+        total_loss = 0
+        if cfg.FPN.FPN_ON:
+            loss_rpn_cls_data = 0
+            loss_rpn_bbox_data = 0
+
+        if inner_iter == 0:
+            self.inner_total_loss = []
+            for k in model_out['losses']:
+                self.inner_losses[k] = []
+            if cfg.FPN.FPN_ON:
+                self.inner_loss_rpn_cls = []
+                self.inner_loss_rpn_bbox = []
+            for k in model_out['metrics']:
+                self.inner_metrics[k] = []
+
+        for k, loss in model_out['losses'].items():
+            assert loss.shape[0] == cfg.NUM_GPUS
+            loss = loss.mean(dim=0)
+            total_loss += loss
+            loss_data = loss.data[0]
+
+            model_out['losses'][k] = loss
+            if cfg.FPN.FPN_ON:
+                if k.startswith('loss_rpn_cls_'):
+                    loss_rpn_cls_data += loss_data
+                elif k.startswith('loss_rpn_bbox_'):
+                    loss_rpn_bbox_data += loss_data
+
+            self.inner_losses[k].append(loss_data)
+            if inner_iter == (self.misc_args.iter_size - 1):
+                loss_data = self._mean_and_reset_inner_list('inner_losses', k)
+                self.smoothed_losses[k].AddValue(loss_data)
+
+        model_out['total_loss'] = total_loss  # Add the total loss for back propagation
+        total_loss_data = total_loss.data[0]
+        self.inner_total_loss.append(total_loss_data)
+        if cfg.FPN.FPN_ON:
+            self.inner_loss_rpn_cls.append(loss_rpn_cls_data)
+            self.inner_loss_rpn_bbox.append(loss_rpn_bbox_data)
+        if inner_iter == (self.misc_args.iter_size - 1):
+            total_loss_data = self._mean_and_reset_inner_list('inner_total_loss')
+            self.smoothed_total_loss.AddValue(total_loss_data)
+            if cfg.FPN.FPN_ON:
+                loss_rpn_cls_data = self._mean_and_reset_inner_list('inner_loss_rpn_cls')
+                loss_rpn_bbox_data = self._mean_and_reset_inner_list('inner_loss_rpn_bbox')
+                self.smoothed_losses['loss_rpn_cls'].AddValue(loss_rpn_cls_data)
+                self.smoothed_losses['loss_rpn_bbox'].AddValue(loss_rpn_bbox_data)
+
+        for k, metric in model_out['metrics'].items():
+            metric = metric.mean(dim=0)
+            metric_data = metric.data[0]
+            self.inner_metrics[k].append(metric_data)
+            if inner_iter == (self.misc_args.iter_size - 1):
+                metric_data = self._mean_and_reset_inner_list('inner_metrics', k)
+                self.smoothed_metrics[k].AddValue(metric_data)
+
+    def _mean_and_reset_inner_list(self, attr_name, key=None):
+        """Take the mean and reset list empty"""
+        if key:
+            mean_val = sum(getattr(self, attr_name)[key]) / self.misc_args.iter_size
+            getattr(self, attr_name)[key] = []
+        else:
+            mean_val = sum(getattr(self, attr_name)) / self.misc_args.iter_size
+            setattr(self, attr_name, [])
+        return mean_val
 
     def LogIterStats(self, cur_iter, lr):
         """Log the tracked statistics."""

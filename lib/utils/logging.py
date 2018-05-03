@@ -63,6 +63,7 @@ def log_stats(stats, misc_args):
         lines += "\t\t" + ", ".join("%s: %.6f" % (k, v) for k, v in stats['rpn_fpn_bbox_losses'].items()) + "\n"
     print(lines[:-1])  # remove last new line
 
+
 class SmoothedValue(object):
     """Track a series of values and provide access to smoothed values over a
     window or the global series average.
