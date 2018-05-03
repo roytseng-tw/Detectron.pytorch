@@ -265,7 +265,9 @@ def main():
         if args.resume:
             args.start_step = checkpoint['step'] + 1
             if 'train_size' in checkpoint:  # For backward compatibility
-                assert checkpoint['train_size'] == train_size
+                if checkpoint['train_size'] != train_size:
+                    print('train_size value: %d different from the one in checkpoint: %d',
+                          train_size, checkpoint['train_size'])
             # There is a bug in optimizer.load_state_dict on Pytorch 0.3.1.
             # However it's fixed on master.
             # optimizer.load_state_dict(checkpoint['optimizer'])
