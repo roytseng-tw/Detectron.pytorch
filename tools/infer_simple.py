@@ -128,7 +128,7 @@ def main():
         load_detectron_weight(maskRCNN, args.load_detectron)
 
     maskRCNN = mynn.DataParallel(maskRCNN, cpu_keywords=['im_info', 'roidb'],
-                                 minibatch=True)
+                                 minibatch=True, device_ids=[0])  # only support single GPU
 
     maskRCNN.eval()
     if args.image_dir:
