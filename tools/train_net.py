@@ -358,15 +358,14 @@ def main():
             # log last stats at the end
             log_training_stats(training_stats, global_step, lr)
 
-    except (RuntimeError, KeyboardInterrupt) as e:
-        has_exception = True
+    except (RuntimeError, KeyboardInterrupt):
+        logger.info('Save ckpt on exception ...')
+        net_utils.save_ckpt(output_dir, args, maskRCNN, optimizer)
+        logger.info('Save ckpt done.')
         stack_trace = traceback.format_exc()
         print(stack_trace)
 
     finally:
-        if locals().get('has_exception'):
-            print('Save on exception')
-            net_utils.save_ckpt(output_dir, args, maskRCNN, optimizer)
         if args.use_tfboard and not args.no_save:
             tblogger.close()
 

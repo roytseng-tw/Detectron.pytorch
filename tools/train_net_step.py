@@ -383,16 +383,15 @@ def main():
         # Save last checkpoint
         save_ckpt(output_dir, args, step, train_size, maskRCNN, optimizer)
 
-    except (RuntimeError, KeyboardInterrupt) as e:
-        has_exception = True
+    except (RuntimeError, KeyboardInterrupt):
+        del dataiterator
+        logger.info('Save ckpt on exception ...')
+        save_ckpt(output_dir, args, step, train_size, maskRCNN, optimizer)
+        logger.info('Save ckpt done.')
         stack_trace = traceback.format_exc()
         print(stack_trace)
 
     finally:
-        if locals().get('has_exception'):
-            print('Save on exception')
-            save_ckpt(output_dir, args, step, train_size, maskRCNN, optimizer)
-
         if args.use_tfboard and not args.no_save:
             tblogger.close()
 
