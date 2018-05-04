@@ -172,8 +172,8 @@ def main():
         'batch_size: %d, NUM_GPUS: %d' % (args.batch_size, cfg.NUM_GPUS)
     cfg.TRAIN.IMS_PER_BATCH = args.batch_size // cfg.NUM_GPUS
     effective_batch_size = args.iter_size * args.batch_size
-    print('Effective Batch size (batch_size X iter_size) change from {} (in config file) to {}'.format(
-        original_batch_size, effective_batch_size))
+    print('Effective Batch size (batch_size X iter_size) change from {} (in config file) to {}'
+          .format(original_batch_size, effective_batch_size))
     print('NUM_GPUs: %d, TRAIN.IMS_PER_BATCH: %d, iter_size: %d' %
           (cfg.NUM_GPUS, cfg.TRAIN.IMS_PER_BATCH, args.iter_size))
 
@@ -188,6 +188,17 @@ def main():
     cfg.SOLVER.BASE_LR *= args.batch_size / original_batch_size
     print('Adjust BASE_LR linearly according to batch size change: {} --> {}'.format(
         old_base_lr, cfg.SOLVER.BASE_LR))
+
+    ### Adjust solver steps
+    step_scale = original_batch_size / effective_batch_size
+    old_solver_steps = cfg.SOLVER.STEPS
+    old_max_iter = cfg.SOLVER.MAX_ITER
+    cfg.SOLVER.STEPS = list(map(lambda x: int(x * step_scale + 0.5), cfg.SOLVER.STEPS))
+    cfg.SOLVER.MAX_ITER = int(cfg.SOLVER.MAX_ITER * step_scale + 0.5)
+    print('Adjust SOLVER.STEPS and SOLVER.MAX_ITER linearly based on effective batch size change:\n'
+          '    Old: {}, {}\n'
+          '    New: {}, {}'.format(
+              old_solver_steps, old_max_iter, cfg.SOLVER.STEPS, cfg.SOLVER.MAX_ITER))
 
     ### Overwrite some solver settings from command line arguments
     if args.optimizer is not None:
