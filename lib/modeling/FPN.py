@@ -145,7 +145,12 @@ class fpn(nn.Module):
             if isinstance(m, nn.Conv2d):
                 mynn.init.XavierFill(m.weight)
                 init.constant(m.bias, 0)
-        self.apply(init_func)
+
+        for child_m in self.children():
+            if (not isinstance(child_m, nn.ModuleList) or
+                not isinstance(child_m[0], topdown_lateral_module)):
+                # topdown_lateral_module has its own init method
+                child_m.apply(init_func)
 
     def detectron_weight_mapping(self):
         conv_body_mapping, orphan_in_detectron = self.conv_body.detectron_weight_mapping()
