@@ -284,7 +284,9 @@ class fpn_rpn_outputs(nn.Module):
 
         # Create conv ops shared by all FPN levels
         self.FPN_RPN_conv = nn.Conv2d(dim_in, self.dim_out, 3, 1, 1)
-        self.FPN_RPN_cls_score = nn.Conv2d(self.dim_out, num_anchors, 1, 1, 0)
+        dim_score = num_anchors * 2 if cfg.RPN.CLS_ACTIVATION == 'softmax' \
+            else num_anchors
+        self.FPN_RPN_cls_score = nn.Conv2d(self.dim_out, dim_score, 1, 1, 0)
         self.FPN_RPN_bbox_pred = nn.Conv2d(self.dim_out, 4 * num_anchors, 1, 1, 0)
 
         self.GenerateProposals_modules = nn.ModuleList()
@@ -346,7 +348,13 @@ class fpn_rpn_outputs(nn.Module):
                 #  OR
                 #  2) training for Faster R-CNN
                 # Otherwise (== training for RPN only), proposals are not needed
-                fpn_rpn_cls_probs = F.sigmoid(fpn_rpn_cls_score)
+                if cfg.RPN.CLS_ACTIVATION == 'softmax':
+                    B, C, H, W = fpn_rpn_cls_score.size()
+                    fpn_rpn_cls_probs = F.softmax(
+                        fpn_rpn_cls_score.view(B, 2, C // 2, H, W), dim=1)
+                    fpn_rpn_cls_probs = fpn_rpn_cls_probs[:, 1].squeeze(dim=1)
+                else:  # sigmoid
+                    fpn_rpn_cls_probs = F.sigmoid(fpn_rpn_cls_score)
 
                 fpn_rpn_rois, fpn_rpn_roi_probs = self.GenerateProposals_modules[lvl - k_min](
                     fpn_rpn_cls_probs, fpn_rpn_bbox_pred, im_info)
@@ -370,7 +378,7 @@ def fpn_rpn_losses(**kwargs):
     for lvl in range(cfg.FPN.RPN_MIN_LEVEL, cfg.FPN.RPN_MAX_LEVEL + 1):
         slvl = str(lvl)
         # Spatially narrow the full-sized RPN label arrays to match the feature map shape
-        h, w = kwargs['rpn_cls_logits_fpn' + slvl].shape[2:]
+        b, c, h, w = kwargs['rpn_cls_logits_fpn' + slvl].shape
         rpn_labels_int32_fpn = kwargs['rpn_labels_int32_wide_fpn' + slvl][:, :, :h, :w]
         h, w = kwargs['rpn_bbox_pred_fpn' + slvl].shape[2:]
         rpn_bbox_targets_fpn = kwargs['rpn_bbox_targets_wide_fpn' + slvl][:, :, :h, :w]
@@ -379,11 +387,19 @@ def fpn_rpn_losses(**kwargs):
         rpn_bbox_outside_weights_fpn = kwargs[
             'rpn_bbox_outside_weights_wide_fpn' + slvl][:, :, :h, :w]
 
-        weight = (rpn_labels_int32_fpn >= 0).float()
-        loss_rpn_cls_fpn = F.binary_cross_entropy_with_logits(
-            kwargs['rpn_cls_logits_fpn' + slvl], rpn_labels_int32_fpn.float(), weight,
-            size_average=False)
-        loss_rpn_cls_fpn /= cfg.TRAIN.RPN_BATCH_SIZE_PER_IM * cfg.TRAIN.IMS_PER_BATCH
+        if cfg.RPN.CLS_ACTIVATION == 'softmax':
+            rpn_cls_logits_fpn = kwargs['rpn_cls_logits_fpn' + slvl].view(
+                b, 2, c // 2, h, w).permute(0, 2, 3, 4, 1).contiguous().view(-1, 2)
+            rpn_labels_int32_fpn = rpn_labels_int32_fpn.contiguous().view(-1).long()
+            # the loss is averaged over non-ignored targets
+            loss_rpn_cls_fpn = F.cross_entropy(
+                rpn_cls_logits_fpn, rpn_labels_int32_fpn, ignore_index=-1)
+        else:  # sigmoid
+            weight = (rpn_labels_int32_fpn >= 0).float()
+            loss_rpn_cls_fpn = F.binary_cross_entropy_with_logits(
+                kwargs['rpn_cls_logits_fpn' + slvl], rpn_labels_int32_fpn.float(), weight,
+                size_average=False)
+            loss_rpn_cls_fpn /= cfg.TRAIN.RPN_BATCH_SIZE_PER_IM * cfg.TRAIN.IMS_PER_BATCH
 
         # Normalization by (1) RPN_BATCH_SIZE_PER_IM and (2) IMS_PER_BATCH is
         # handled by (1) setting bbox outside weights and (2) SmoothL1Loss
