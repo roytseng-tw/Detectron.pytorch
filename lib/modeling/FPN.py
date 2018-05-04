@@ -230,7 +230,10 @@ class topdown_lateral_module(nn.Module):
         self._init_weights()
 
     def _init_weights(self):
-        mynn.init.XavierFill(self.conv_lateral.weight)
+        if cfg.FPN.ZERO_INIT_LATERAL:
+            init.constant(self.conv_lateral.weight, 0)
+        else:
+            mynn.init.XavierFill(self.conv_lateral.weight)
         init.constant(self.conv_lateral.bias, 0)
 
     def forward(self, top_blob, lateral_blob):
