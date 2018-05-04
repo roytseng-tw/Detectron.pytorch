@@ -104,9 +104,8 @@ class single_scale_rpn_outputs(nn.Module):
             if cfg.RPN.CLS_ACTIVATION == 'softmax':
                 B, C, H, W = rpn_cls_logits.size()
                 rpn_cls_prob = F.softmax(
-                    rpn_cls_logits.view(B, 2, C / 2, H, W), dim=1).view(
-                        B, C, H, W)
-                rpn_cls_prob = rpn_cls_prob[:, 1].view(B, C / 2, H, W)
+                    rpn_cls_logits.view(B, 2, C // 2, H, W), dim=1)
+                rpn_cls_prob = rpn_cls_prob[:, 1].squeeze(dim=1)
             else:
                 rpn_cls_prob = F.sigmoid(rpn_cls_logits)
 
@@ -142,10 +141,12 @@ def single_scale_rpn_losses(
 
     if cfg.RPN.CLS_ACTIVATION == 'softmax':
         B, C, H, W = rpn_cls_logits.size()
-        rpn_cls_logits = rpn_cls_logits.view(B, 2, C / 2, H, W).permute(0, 2, 3, 4, 1).view(-1, 2)
-        rpn_labels_int32 = rpn_labels_int32.view(-1).long()
-        loss_rpn_cls = F.cross_entropy(rpn_cls_logits, rpn_labels_int32, ignore_index=-1, size_average=False)
-        loss_rpn_cls /= (rpn_labels_int32 >= 0).sum().float()
+        rpn_cls_logits = rpn_cls_logits.view(
+            B, 2, C // 2, H, W).permute(0, 2, 3, 4, 1).contiguous().view(-1, 2)
+        rpn_labels_int32 = rpn_labels_int32.contiguous().view(-1).long()
+        # the loss is averaged over non-ignored targets
+        loss_rpn_cls = F.cross_entropy(
+            rpn_cls_logits, rpn_labels_int32, ignore_index=-1)
     else:
         weight = (rpn_labels_int32 >= 0).float()
         loss_rpn_cls = F.binary_cross_entropy_with_logits(
