@@ -1,5 +1,7 @@
 # A Pytorch Implementation of Detectron
 
+[![Build Status](https://travis-ci.com/roytseng-tw/Detectron.pytorch.svg?branch=master)](https://travis-ci.com/roytseng-tw/Detectron.pytorch)
+
 <div align="center">
 
 <img src="demo/33823288584_1d21cf0a26_k-pydetectron-R101-FPN.jpg" width="700px"/>
