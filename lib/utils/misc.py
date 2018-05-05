@@ -44,6 +44,43 @@ def get_imagelist_from_dir(dirpath):
     return images
 
 
+def ensure_optimizer_ckpt_params_order(param_groups_names, checkpoint):
+    """Reorder the parameter ids in the SGD optimizer checkpoint to match
+    the current order in the program, in case parameter insertion order is changed.
+    """
+    assert len(param_groups_names) == len(checkpoint['optimizer']['param_groups'])
+    param_lens = (len(g) for g in param_groups_names)
+    saved_lens = (len(g['params']) for g in checkpoint['optimizer']['param_groups'])
+    if any(p_len != s_len for p_len, s_len in zip(param_lens, saved_lens)):
+        raise ValueError("loaded state dict contains a parameter group "
+                         "that doesn't match the size of optimizer's group")
+
+    name_to_curpos = {}
+    for i, p_names in enumerate(param_groups_names):
+        for j, name in enumerate(p_names):
+            name_to_curpos[name] = (i, j)
+
+    param_groups_inds = [[] for _ in range(len(param_groups_names))]
+    cnts = [0] * len(param_groups_names)
+    for key in checkpoint['model']:
+        pos = name_to_curpos.get(key)
+        if pos:
+            # print(key, pos, cnts[pos[0]])
+            saved_p_id = checkpoint['optimizer']['param_groups'][pos[0]]['params'][cnts[pos[0]]]
+            assert (checkpoint['model'][key].shape ==
+                    checkpoint['optimizer']['state'][saved_p_id]['momentum_buffer'].shape), \
+                   ('param and momentum_buffer shape mismatch in checkpoint.'
+                    ' param_name: {}, param_id: {}'.format(key, saved_p_id))
+            param_groups_inds[pos[0]].append(pos[1])
+            cnts[pos[0]] += 1
+
+    for cnt, param_inds in enumerate(param_groups_inds):
+        ckpt_params = checkpoint['optimizer']['param_groups'][cnt]['params']
+        assert len(ckpt_params) == len(param_inds)
+        ckpt_params = [x for x, _ in sorted(zip(ckpt_params, param_inds), key=lambda x: x[1])]
+        checkpoint['optimizer']['param_groups'][cnt]['params'] = ckpt_params
+
+
 def load_optimizer_state_dict(optimizer, state_dict):
     # deepcopy, to be consistent with module API
     state_dict = deepcopy(state_dict)

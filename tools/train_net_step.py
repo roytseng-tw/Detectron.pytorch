@@ -245,13 +245,17 @@ def main():
 
     ### Optimizer ###
     bias_params = []
+    bias_param_names = []
     nonbias_params = []
+    nonbias_param_names = []
     for key, value in dict(maskRCNN.named_parameters()).items():
         if value.requires_grad:
             if 'bias' in key:
                 bias_params.append(value)
+                bias_param_names.append(key)
             else:
                 nonbias_params.append(value)
+                nonbias_param_names.append(key)
     # Learning rate of 0 is a dummy value to be set properly at the start of training
     params = [
         {'params': nonbias_params,
@@ -261,6 +265,8 @@ def main():
          'lr': 0 * (cfg.SOLVER.BIAS_DOUBLE_LR + 1),
          'weight_decay': cfg.SOLVER.WEIGHT_DECAY if cfg.SOLVER.BIAS_WEIGHT_DECAY else 0}
     ]
+    # names of paramerters for each paramter
+    param_names = [nonbias_param_names, bias_param_names]
 
     if cfg.SOLVER.TYPE == "SGD":
         optimizer = torch.optim.SGD(params, momentum=cfg.SOLVER.MOMENTUM)
@@ -278,7 +284,11 @@ def main():
             if 'train_size' in checkpoint:  # For backward compatibility
                 if checkpoint['train_size'] != train_size:
                     print('train_size value: %d different from the one in checkpoint: %d'
-                           % (train_size, checkpoint['train_size']))
+                          % (train_size, checkpoint['train_size']))
+
+            # reorder the params in optimizer checkpoint's params_groups if needed
+            # misc_utils.ensure_optimizer_ckpt_params_order(param_names, checkpoint)
+
             # There is a bug in optimizer.load_state_dict on Pytorch 0.3.1.
             # However it's fixed on master.
             # optimizer.load_state_dict(checkpoint['optimizer'])
