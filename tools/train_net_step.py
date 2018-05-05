@@ -165,6 +165,8 @@ def main():
 
     ### Adaptively adjust some configs ###
     original_batch_size = cfg.NUM_GPUS * cfg.TRAIN.IMS_PER_BATCH
+    original_ims_per_batch = cfg.TRAIN.IMS_PER_BATCH
+    original_num_gpus = cfg.NUM_GPUS
     if args.batch_size is None:
         args.batch_size = original_batch_size
     cfg.NUM_GPUS = torch.cuda.device_count()
@@ -172,22 +174,20 @@ def main():
         'batch_size: %d, NUM_GPUS: %d' % (args.batch_size, cfg.NUM_GPUS)
     cfg.TRAIN.IMS_PER_BATCH = args.batch_size // cfg.NUM_GPUS
     effective_batch_size = args.iter_size * args.batch_size
-    print('Effective Batch size (batch_size X iter_size) change from {} (in config file) to {}'
-          .format(original_batch_size, effective_batch_size))
-    print('NUM_GPUs: %d, TRAIN.IMS_PER_BATCH: %d, iter_size: %d' %
-          (cfg.NUM_GPUS, cfg.TRAIN.IMS_PER_BATCH, args.iter_size))
+    print('effective_batch_size = batch_size * iter_size = %d * %d' % (args.batch_size, args.iter_size))
 
-    if args.num_workers is not None:
-        cfg.DATA_LOADER.NUM_THREADS = args.num_workers
-    print('Number of data loading threads: %d' % cfg.DATA_LOADER.NUM_THREADS)
+    print('Adaptive config changes:')
+    print('    effective_batch_size: %d --> %d' % (original_batch_size, effective_batch_size))
+    print('    NUM_GPUS:             %d --> %d' % (original_num_gpus, cfg.NUM_GPUS))
+    print('    IMS_PER_BATCH:        %d --> %d' % (original_ims_per_batch, cfg.TRAIN.IMS_PER_BATCH))
 
     ### Adjust learning based on batch size change linearly
     # For iter_size > 1, gradients are `accumulated`, so lr is scaled based
     # on batch_size instead of effective_batch_size
     old_base_lr = cfg.SOLVER.BASE_LR
     cfg.SOLVER.BASE_LR *= args.batch_size / original_batch_size
-    print('Adjust BASE_LR linearly according to batch size change: {} --> {}'.format(
-        old_base_lr, cfg.SOLVER.BASE_LR))
+    print('Adjust BASE_LR linearly according to batch_size change:\n'
+          '    BASE_LR: {} --> {}'.format(old_base_lr, cfg.SOLVER.BASE_LR))
 
     ### Adjust solver steps
     step_scale = original_batch_size / effective_batch_size
@@ -195,11 +195,26 @@ def main():
     old_max_iter = cfg.SOLVER.MAX_ITER
     cfg.SOLVER.STEPS = list(map(lambda x: int(x * step_scale + 0.5), cfg.SOLVER.STEPS))
     cfg.SOLVER.MAX_ITER = int(cfg.SOLVER.MAX_ITER * step_scale + 0.5)
-    print('Adjust SOLVER.STEPS and SOLVER.MAX_ITER linearly based on effective batch size change:\n'
-          '    Old: {}, {}\n'
-          '    New: {}, {}'.format(
-              old_solver_steps, old_max_iter, cfg.SOLVER.STEPS, cfg.SOLVER.MAX_ITER))
+    print('Adjust SOLVER.STEPS and SOLVER.MAX_ITER linearly based on effective_batch_size change:\n'
+          '    SOLVER.STEPS: {} --> {}\n'
+          '    SOLVER.MAX_ITER: {} --> {}'.format(old_solver_steps, cfg.SOLVER.STEPS,
+                                                  old_max_iter, cfg.SOLVER.MAX_ITER))
 
+    ### Adjust RPN settings based on IMS_PER_BATCH change
+    original_rpn_pre_nms_top_n = cfg.TRAIN.RPN_PRE_NMS_TOP_N
+    original_rpn_post_nms_top_n = cfg.TRAIN.RPN_POST_NMS_TOP_N
+    rpn_scale = cfg.TRAIN.IMS_PER_BATCH / original_ims_per_batch
+    cfg.TRAIN.RPN_PRE_NMS_TOP_N = int(cfg.TRAIN.RPN_PRE_NMS_TOP_N * rpn_scale + 0.5)
+    cfg.TRAIN.RPN_POST_NMS_TOP_N = int(cfg.TRAIN.RPN_POST_NMS_TOP_N * rpn_scale + 0.5)
+    print('Adjust TRAIN.RPN_PRE_NMS_TOP_N and TRAIN.RPN_POST_NMS_TOP_N linearly based on IMS_PER_BATCH change:\n'
+          '    TRAIN.RPN_PRE_NMS_TOP_N: {} --> {}\n'
+          '    TRAIN.RPN_POST_NMS_TOP_N: {} --> {}'.format(original_rpn_pre_nms_top_n, cfg.TRAIN.RPN_PRE_NMS_TOP_N,
+                                                           original_rpn_post_nms_top_n, cfg.TRAIN.RPN_POST_NMS_TOP_N))
+
+    if args.num_workers is not None:
+        cfg.DATA_LOADER.NUM_THREADS = args.num_workers
+    print('Number of data loading threads: %d' % cfg.DATA_LOADER.NUM_THREADS)
+    
     ### Overwrite some solver settings from command line arguments
     if args.optimizer is not None:
         cfg.SOLVER.TYPE = args.optimizer
