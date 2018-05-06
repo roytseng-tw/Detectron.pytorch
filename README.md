@@ -147,7 +147,7 @@ python tools/download_imagenet_weights.py
 
 ### Adapative config adjustment
 
-Follow config options will be adjusted according to actual training setups: 1) number of GPUs `NUM_GPUS`, 2) batch size per GPU `TRAIN.IMS_PER_BATCH`, 3) update period `iter_size`
+Following config options will be adjusted according to actual training setups: 1) number of GPUs `NUM_GPUS`, 2) batch size per GPU `TRAIN.IMS_PER_BATCH`, 3) update period `iter_size`
 
 ##### Let's define some terms first
 
