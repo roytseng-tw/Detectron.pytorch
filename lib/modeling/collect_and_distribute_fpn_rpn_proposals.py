@@ -96,9 +96,9 @@ def distribute(rois, label_blobs):
     lvls = fpn_utils.map_rois_to_fpn_levels(rois[:, 1:5], lvl_min, lvl_max)
 
     # Delete roi entries that have negative area
-    idx_neg = np.where(lvls == -1)[0]
-    rois = np.delete(rois, idx_neg, axis=0)
-    lvls = np.delete(lvls, idx_neg, axis=0)
+    # idx_neg = np.where(lvls == -1)[0]
+    # rois = np.delete(rois, idx_neg, axis=0)
+    # lvls = np.delete(lvls, idx_neg, axis=0)
 
     output_blob_names = roi_data.fast_rcnn.get_fast_rcnn_blob_names(is_training=False)
     outputs = [None] * len(output_blob_names)
