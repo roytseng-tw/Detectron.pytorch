@@ -145,6 +145,20 @@ python tools/download_imagenet_weights.py
 
 ## Training
 
+### Adapative config adjustment
+
+Follow config options will be adjusted according to actual training setups: 1) number of GPUs `NUM_GPUS`, 2) batch size per GPU `TRAIN.IMS_PER_BATCH`, 3) update period `iter_size`
+
+##### Let's define some terms first
+
+batch_size:            `NUM_GPUS` x `TRAIN.IMS_PER_BATCH`  
+effective_batch_size:  batch_size x `iter_size`  
+change of somethining: `new value of something / old value of something`
+
+- `SOLVER.BASE_LR`: adjust directly propotional to the change of batch_size.
+- `SOLVER.STEPS`, `SOLVER.MAX_ITER`: adjust inversely propotional to the change of effective_batch_size.
+- `TRAIN.RPN_PRE_NMS_TOP_N`, `TRAIN.RPN_POST_NMS_TOP_N`: adjust directly propotional to the change of batch size per GPU.
+
 ### Train from scratch
 Take mask-rcnn with res50 backbone for example.
 ```
@@ -156,6 +170,14 @@ Use `--bs` to overwrite the default batch size to a proper value that fits into 
 Specify `—-use_tfboard` to log the losses on Tensorboard.
 
 **NOTE**: use `--dataset keypoints_coco2017` when training for keypoint-rcnn.
+
+### The use of `--iter_size`
+As in Caffe, update network once (`optimizer.step()`) every `iter_size` iterations (forward + backward). This way to have a larger effective batch size for training. Notice that, step count is only increased after network update.
+
+```
+python tools/train_net_step.py --dataset coco2017 --cfg configs/e2e_mask_rcnn_R-50-C4.yml --bs 4 --iter_size 4
+```
+`iter_size` defaults to 1.
 
 ### Finetune from a pretrained checkpoint
 ```
@@ -197,7 +219,7 @@ In `train_net_step.py`:
 - `SOLVER.LR_POLICY: steps_with_decay` is supported.
 - Training warm up in [Accurate, Large Minibatch SGD: Training ImageNet in 1 Hour](https://arxiv.org/abs/1706.02677) is supported.
 
-In `train_net.py` some config options have no effects and worth noticing:
+(Deprecated) In `train_net.py` some config options have no effects and worth noticing:
 
  - `SOLVER.LR_POLICY`, `SOLVER.MAX_ITER`, `SOLVER.STEPS`,`SOLVER.LRS`:
   For now, the training policy is controlled by these command line arguments:
