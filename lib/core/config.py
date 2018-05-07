@@ -126,11 +126,11 @@ __C.TRAIN.RPN_BATCH_SIZE_PER_IM = 256
 # NMS threshold used on RPN proposals (used during end-to-end training with RPN)
 __C.TRAIN.RPN_NMS_THRESH = 0.7
 
-# Number of top scoring RPN proposals to keep before applying NMS
+# Number of top scoring RPN proposals to keep before applying NMS (per image)
 # When FPN is used, this is *per FPN level* (not total)
 __C.TRAIN.RPN_PRE_NMS_TOP_N = 12000
 
-# Number of top scoring RPN proposals to keep after applying NMS
+# Number of top scoring RPN proposals to keep after applying NMS (per image)
 # This is the total number of RPN proposals produced (for both FPN and non-FPN
 # cases)
 __C.TRAIN.RPN_POST_NMS_TOP_N = 2000

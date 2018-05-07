@@ -71,7 +71,7 @@ class CollectAndDistributeFpnRpnProposalsOp(nn.Module):
 
 def collect(inputs, is_training):
     cfg_key = 'TRAIN' if is_training else 'TEST'
-    post_nms_topN = cfg[cfg_key].RPN_POST_NMS_TOP_N
+    post_nms_topN = int(cfg[cfg_key].RPN_POST_NMS_TOP_N * cfg.FPN.RPN_COLLECT_SCALE + 0.5)
     k_max = cfg.FPN.RPN_MAX_LEVEL
     k_min = cfg.FPN.RPN_MIN_LEVEL
     num_lvls = k_max - k_min + 1

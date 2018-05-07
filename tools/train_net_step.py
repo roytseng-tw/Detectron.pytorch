@@ -200,16 +200,14 @@ def main():
           '    SOLVER.MAX_ITER: {} --> {}'.format(old_solver_steps, cfg.SOLVER.STEPS,
                                                   old_max_iter, cfg.SOLVER.MAX_ITER))
 
-    ### Adjust RPN settings based on IMS_PER_BATCH change
-    original_rpn_pre_nms_top_n = cfg.TRAIN.RPN_PRE_NMS_TOP_N
-    original_rpn_post_nms_top_n = cfg.TRAIN.RPN_POST_NMS_TOP_N
-    rpn_scale = cfg.TRAIN.IMS_PER_BATCH / original_ims_per_batch
-    cfg.TRAIN.RPN_PRE_NMS_TOP_N = int(cfg.TRAIN.RPN_PRE_NMS_TOP_N * rpn_scale + 0.5)
-    cfg.TRAIN.RPN_POST_NMS_TOP_N = int(cfg.TRAIN.RPN_POST_NMS_TOP_N * rpn_scale + 0.5)
-    print('Adjust TRAIN.RPN_PRE_NMS_TOP_N and TRAIN.RPN_POST_NMS_TOP_N linearly based on IMS_PER_BATCH change:\n'
-          '    TRAIN.RPN_PRE_NMS_TOP_N: {} --> {}\n'
-          '    TRAIN.RPN_POST_NMS_TOP_N: {} --> {}'.format(original_rpn_pre_nms_top_n, cfg.TRAIN.RPN_PRE_NMS_TOP_N,
-                                                           original_rpn_post_nms_top_n, cfg.TRAIN.RPN_POST_NMS_TOP_N))
+    # Scale FPN rpn_proposals collect size (post_nms_topN) in `collect` function
+    # of `collect_and_distribute_fpn_rpn_proposals.py`
+    #
+    # post_nms_topN = int(cfg[cfg_key].RPN_POST_NMS_TOP_N * cfg.FPN.RPN_COLLECT_SCALE + 0.5)
+    if cfg.FPN.FPN_ON and cfg.MODEL.FASTER_RCNN:
+        cfg.FPN.RPN_COLLECT_SCALE = cfg.TRAIN.IMS_PER_BATCH / original_ims_per_batch
+        print('Scale FPN rpn_proposals collect size directly propotional to the change of IMS_PER_BATCH:\n'
+              '    cfg.FPN.RPN_COLLECT_SCALE: {}'.format(cfg.FPN.RPN_COLLECT_SCALE))
 
     if args.num_workers is not None:
         cfg.DATA_LOADER.NUM_THREADS = args.num_workers

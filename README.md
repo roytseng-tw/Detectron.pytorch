@@ -157,7 +157,6 @@ change of somethining: `new value of something / old value of something`
 
 - `SOLVER.BASE_LR`: adjust directly propotional to the change of batch_size.
 - `SOLVER.STEPS`, `SOLVER.MAX_ITER`: adjust inversely propotional to the change of effective_batch_size.
-- `TRAIN.RPN_PRE_NMS_TOP_N`, `TRAIN.RPN_POST_NMS_TOP_N`: adjust directly propotional to the change of batch size per GPU.
 
 ### Train from scratch
 Take mask-rcnn with res50 backbone for example.
