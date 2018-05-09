@@ -706,6 +706,9 @@ __C.FPN.RPN_ASPECT_RATIOS = (0.5, 1, 2)
 # The anchor size doubled each level after that
 # With a default of 32 and levels 2 to 6, we get anchor sizes of 32 to 512
 __C.FPN.RPN_ANCHOR_START_SIZE = 32
+# [Infered Value] Scale for RPN_POST_NMS_TOP_N.
+# Automatically infered in training, fixed to 1 in testing.
+__C.FPN.RPN_COLLECT_SCALE = 1
 # Use extra FPN levels, as done in the RetinaNet paper
 __C.FPN.EXTRA_CONV_LEVELS = False
 
