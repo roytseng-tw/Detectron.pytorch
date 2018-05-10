@@ -101,6 +101,7 @@
   python train_net_step.py \
     --dataset coco2017 --cfg configs/e2e_mask_rcnn_R-50-FPN_1x.yml --use_tfboard
   ```
+  on four M40 GPUs.
 
 <table><tbody>
 <tr><th colspan="13" bgcolor=#f8f8f8>Box</th></tr>
