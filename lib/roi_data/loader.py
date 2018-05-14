@@ -4,8 +4,9 @@ import numpy.random as npr
 
 import torch
 import torch.utils.data as data
-import torch.utils.data.sampler as sampler
+import torch.utils.data.sampler as torch_sampler
 from torch.utils.data.dataloader import default_collate
+from torch._six import int_classes as _int_classes
 
 from core.config import cfg
 from roi_data.minibatch import get_minibatch
@@ -143,7 +144,7 @@ def cal_minibatch_ratio(ratio_list):
     return ratio_list_minibatch
 
 
-class MinibatchSampler(sampler.Sampler):
+class MinibatchSampler(torch_sampler.Sampler):
     def __init__(self, ratio_list, ratio_index):
         self.ratio_list = ratio_list
         self.ratio_index = ratio_index
@@ -176,6 +177,54 @@ class MinibatchSampler(sampler.Sampler):
 
     def __len__(self):
         return self.num_data
+
+
+class BatchSampler(torch_sampler.BatchSampler):
+    r"""Wraps another sampler to yield a mini-batch of indices.
+    Args:
+        sampler (Sampler): Base sampler.
+        batch_size (int): Size of mini-batch.
+        drop_last (bool): If ``True``, the sampler will drop the last batch if
+            its size would be less than ``batch_size``
+    Example:
+        >>> list(BatchSampler(range(10), batch_size=3, drop_last=False))
+        [[0, 1, 2], [3, 4, 5], [6, 7, 8], [9]]
+        >>> list(BatchSampler(range(10), batch_size=3, drop_last=True))
+        [[0, 1, 2], [3, 4, 5], [6, 7, 8]]
+    """
+
+    def __init__(self, sampler, batch_size, drop_last):
+        if not isinstance(sampler, torch_sampler.Sampler):
+            raise ValueError("sampler should be an instance of "
+                             "torch.utils.data.Sampler, but got sampler={}"
+                             .format(sampler))
+        if not isinstance(batch_size, _int_classes) or isinstance(batch_size, bool) or \
+                batch_size <= 0:
+            raise ValueError("batch_size should be a positive integeral value, "
+                             "but got batch_size={}".format(batch_size))
+        if not isinstance(drop_last, bool):
+            raise ValueError("drop_last should be a boolean value, but got "
+                             "drop_last={}".format(drop_last))
+        self.sampler = sampler
+        self.batch_size = batch_size
+        self.drop_last = drop_last
+
+    def __iter__(self):
+        batch = []
+        for idx in self.sampler:
+            batch.append(idx)  # Difference: batch.append(int(idx))
+            if len(batch) == self.batch_size:
+                yield batch
+                batch = []
+        if len(batch) > 0 and not self.drop_last:
+            yield batch
+
+    def __len__(self):
+        if self.drop_last:
+            return len(self.sampler) // self.batch_size
+        else:
+            return (len(self.sampler) + self.batch_size - 1) // self.batch_size
+
 
 
 def collate_minibatch(list_of_blobs):

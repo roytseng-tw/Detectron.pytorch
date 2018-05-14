@@ -23,7 +23,7 @@ import utils.net as net_utils
 import utils.misc as misc_utils
 from core.config import cfg, cfg_from_file, cfg_from_list, assert_and_infer_cfg
 from datasets.roidb import combined_roidb_for_training
-from roi_data.loader import RoiDataLoader, MinibatchSampler, collate_minibatch
+from roi_data.loader import RoiDataLoader, MinibatchSampler, BatchSampler, collate_minibatch
 from modeling.model_builder import Generalized_RCNN
 from utils.detectron_weight_helper import load_detectron_weight
 from utils.logging import setup_logging
@@ -236,16 +236,18 @@ def main():
     # Effective training sample size for one epoch
     train_size = roidb_size // args.batch_size * args.batch_size
 
-    sampler = MinibatchSampler(ratio_list, ratio_index)
+    batchSampler = BatchSampler(
+        sampler=MinibatchSampler(ratio_list, ratio_index),
+        batch_size=args.batch_size,
+        drop_last=True
+    )
     dataset = RoiDataLoader(
         roidb,
         cfg.MODEL.NUM_CLASSES,
         training=True)
     dataloader = torch.utils.data.DataLoader(
         dataset,
-        batch_size=args.batch_size,
-        drop_last=True,
-        sampler=sampler,
+        batch_sampler=batchSampler,
         num_workers=cfg.DATA_LOADER.NUM_THREADS,
         collate_fn=collate_minibatch)
     dataiterator = iter(dataloader)
