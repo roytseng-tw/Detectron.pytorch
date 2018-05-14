@@ -129,8 +129,12 @@ def im_detect_bbox(model, im, target_scale, target_max_size, boxes=None):
     if cfg.FPN.MULTILEVEL_ROIS and not cfg.MODEL.FASTER_RCNN:
         _add_multilevel_rois_for_test(inputs, 'rois')
 
-    inputs['data'] = [Variable(torch.from_numpy(inputs['data']), volatile=True)]
-    inputs['im_info'] = [Variable(torch.from_numpy(inputs['im_info']), volatile=True)]
+    if cfg.PYTORCH_VERSION_LESS_THAN_040:
+        inputs['data'] = [Variable(torch.from_numpy(inputs['data']), volatile=True)]
+        inputs['im_info'] = [Variable(torch.from_numpy(inputs['im_info']), volatile=True)]
+    else:
+        inputs['data'] = [Variable(torch.from_numpy(inputs['data']))]
+        inputs['im_info'] = [Variable(torch.from_numpy(inputs['im_info']))]
 
     return_dict = model(**inputs)
 

@@ -111,6 +111,13 @@ class Generalized_RCNN(nn.Module):
                 p.requires_grad = False
 
     def forward(self, data, im_info, roidb=None, **rpn_kwargs):
+        if cfg.PYTORCH_VERSION_LESS_THAN_040:
+            return self._forward(data, im_info, roidb, **rpn_kwargs)
+        else:
+            with torch.set_grad_enabled(self.training):
+                return self._forward(data, im_info, roidb, **rpn_kwargs)
+
+    def _forward(self, data, im_info, roidb=None, **rpn_kwargs):
         im_data = data
         if self.training:
             roidb = list(map(lambda x: blob_utils.deserialize(x)[0], roidb))
