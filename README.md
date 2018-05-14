@@ -41,6 +41,10 @@ This implementation has the following features:
 
   Besides of that, I implement a customized `nn.DataParallel ` module which enables different batch blob size on different gpus. Check [My nn.DataParallel](#my-nndataparallel) section for more details about this.
 
+## News
+
+- (2018/05/15) PyTorch0.4 is supported now !
+
 ## Getting Started
 Clone the repo:
 
@@ -53,14 +57,15 @@ git clone https://github.com/roytseng-tw/mask-rcnn.pytorch.git
 Tested under python3.
 
 - python packages
-  - pytorch==0.3.1  (cuda80, cudnn7.1.2)
-  - torchvision==0.2.0
+  - pytorch>=0.3.1
+  - torchvision>=0.2.0
   - cython
   - matplotlib
   - numpy
   - scipy
   - opencv
   - pyyaml
+  - packaging
   - [pycocotools](https://github.com/cocodataset/cocoapi)  — for COCO dataset, also available from pip.
   - tensorboardX  — for logging the losses in Tensorboard
 - An NVIDAI GPU and CUDA 8.0 or higher. Some operations only have gpu implementation.
