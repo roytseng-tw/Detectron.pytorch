@@ -81,7 +81,7 @@ class TrainingStats(object):
 
         for k, loss in model_out['losses'].items():
             assert loss.shape[0] == cfg.NUM_GPUS
-            loss = loss.mean(dim=0)
+            loss = loss.mean(dim=0, keepdim=True)
             total_loss += loss
             loss_data = loss.data[0]
             model_out['losses'][k] = loss
@@ -99,7 +99,7 @@ class TrainingStats(object):
             self.smoothed_losses['loss_rpn_bbox'].AddValue(loss_rpn_bbox_data)
 
         for k, metric in model_out['metrics'].items():
-            metric = metric.mean(dim=0)
+            metric = metric.mean(dim=0, keepdim=True)
             self.smoothed_metrics[k].AddValue(metric.data[0])
 
     def _UpdateIterStats_inner(self, model_out, inner_iter):
