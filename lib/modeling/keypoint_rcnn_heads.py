@@ -45,16 +45,16 @@ class keypoint_outputs(nn.Module):
 
     def _init_weights(self):
         if cfg.KRCNN.USE_DECONV:
-            init.normal(self.deconv.weight, std=0.01)
-            init.constant(self.deconv.bias, 0)
+            init.normal_(self.deconv.weight, std=0.01)
+            init.constant_(self.deconv.bias, 0)
 
         if cfg.KRCNN.CONV_INIT == 'GaussianFill':
-            init.normal(self.classify.weight, std=0.001)
+            init.normal_(self.classify.weight, std=0.001)
         elif cfg.KRCNN.CONV_INIT == 'MSRAFill':
             mynn.init.MSRAFill(self.classify.weight)
         else:
             raise ValueError(cfg.KRCNN.CONV_INIT)
-        init.constant(self.classify.bias, 0)
+        init.constant_(self.classify.bias, 0)
 
     def detectron_weight_mapping(self):
         detectron_weight_mapping = {}
@@ -150,12 +150,12 @@ class roi_pose_head_v1convX(nn.Module):
     def _init_weights(self, m):
         if isinstance(m, nn.Conv2d):
             if cfg.KRCNN.CONV_INIT == 'GaussianFill':
-                init.normal(m.weight, std=0.01)
+                init.normal_(m.weight, std=0.01)
             elif cfg.KRCNN.CONV_INIT == 'MSRAFill':
                 mynn.init.MSRAFill(m.weight)
             else:
                 ValueError('Unexpected cfg.KRCNN.CONV_INIT: {}'.format(cfg.KRCNN.CONV_INIT))
-            init.constant(m.bias, 0)
+            init.constant_(m.bias, 0)
 
     def detectron_weight_mapping(self):
         detectron_weight_mapping = {}

@@ -144,7 +144,7 @@ class fpn(nn.Module):
         def init_func(m):
             if isinstance(m, nn.Conv2d):
                 mynn.init.XavierFill(m.weight)
-                init.constant(m.bias, 0)
+                init.constant_(m.bias, 0)
 
         for child_m in self.children():
             if (not isinstance(child_m, nn.ModuleList) or
@@ -236,10 +236,10 @@ class topdown_lateral_module(nn.Module):
 
     def _init_weights(self):
         if cfg.FPN.ZERO_INIT_LATERAL:
-            init.constant(self.conv_lateral.weight, 0)
+            init.constant_(self.conv_lateral.weight, 0)
         else:
             mynn.init.XavierFill(self.conv_lateral.weight)
-        init.constant(self.conv_lateral.bias, 0)
+        init.constant_(self.conv_lateral.bias, 0)
 
     def forward(self, top_blob, lateral_blob):
         # Lateral 1x1 conv
@@ -306,12 +306,12 @@ class fpn_rpn_outputs(nn.Module):
         self._init_weights()
 
     def _init_weights(self):
-        init.normal(self.FPN_RPN_conv.weight, std=0.01)
-        init.constant(self.FPN_RPN_conv.bias, 0)
-        init.normal(self.FPN_RPN_cls_score.weight, std=0.01)
-        init.constant(self.FPN_RPN_cls_score.bias, 0)
-        init.normal(self.FPN_RPN_bbox_pred.weight, std=0.01)
-        init.constant(self.FPN_RPN_bbox_pred.bias, 0)
+        init.normal_(self.FPN_RPN_conv.weight, std=0.01)
+        init.constant_(self.FPN_RPN_conv.bias, 0)
+        init.normal_(self.FPN_RPN_cls_score.weight, std=0.01)
+        init.constant_(self.FPN_RPN_cls_score.bias, 0)
+        init.normal_(self.FPN_RPN_bbox_pred.weight, std=0.01)
+        init.constant_(self.FPN_RPN_bbox_pred.bias, 0)
 
     def detectron_weight_mapping(self):
         k_min = cfg.FPN.RPN_MIN_LEVEL

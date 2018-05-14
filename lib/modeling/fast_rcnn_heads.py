@@ -21,10 +21,10 @@ class fast_rcnn_outputs(nn.Module):
         self._init_weights()
 
     def _init_weights(self):
-        init.normal(self.cls_score.weight, std=0.01)
-        init.constant(self.cls_score.bias, 0)
-        init.normal(self.bbox_pred.weight, std=0.001)
-        init.constant(self.bbox_pred.bias, 0)
+        init.normal_(self.cls_score.weight, std=0.01)
+        init.constant_(self.cls_score.bias, 0)
+        init.normal_(self.bbox_pred.weight, std=0.001)
+        init.constant_(self.bbox_pred.bias, 0)
 
     def detectron_weight_mapping(self):
         detectron_weight_mapping = {
@@ -87,9 +87,9 @@ class roi_2mlp_head(nn.Module):
 
     def _init_weights(self):
         mynn.init.XavierFill(self.fc1.weight)
-        init.constant(self.fc1.bias, 0)
+        init.constant_(self.fc1.bias, 0)
         mynn.init.XavierFill(self.fc2.weight)
-        init.constant(self.fc2.bias, 0)
+        init.constant_(self.fc2.bias, 0)
 
     def detectron_weight_mapping(self):
         detectron_weight_mapping = {

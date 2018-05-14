@@ -41,9 +41,9 @@ class mask_rcnn_outputs(nn.Module):
             # fan-in can be too large in this case and cause divergence
             weight_init_func = mynn.init.MSRAFill
         else:
-            weight_init_func = partial(init.normal, std=0.001)
+            weight_init_func = partial(init.normal_, std=0.001)
         weight_init_func(self.classify.weight)
-        init.constant(self.classify.bias, 0)
+        init.constant_(self.classify.bias, 0)
 
     def detectron_weight_mapping(self):
         mapping = {
@@ -146,12 +146,12 @@ class mask_rcnn_fcn_head_v1upXconvs(nn.Module):
     def _init_weights(self, m):
         if isinstance(m, (nn.Conv2d, nn.ConvTranspose2d)):
             if cfg.MRCNN.CONV_INIT == 'GaussianFill':
-                init.normal(m.weight, std=0.001)
+                init.normal_(m.weight, std=0.001)
             elif cfg.MRCNN.CONV_INIT == 'MSRAFill':
                 mynn.init.MSRAFill(m.weight)
             else:
                 raise ValueError
-            init.constant(m.bias, 0)
+            init.constant_(m.bias, 0)
 
     def detectron_weight_mapping(self):
         mapping_to_detectron = {}
@@ -204,10 +204,10 @@ class mask_rcnn_fcn_head_v0upshare(nn.Module):
 
     def _init_weights(self):
         if cfg.MRCNN.CONV_INIT == 'GaussianFill':
-            init.normal(self.upconv5.weight, std=0.001)
+            init.normal_(self.upconv5.weight, std=0.001)
         elif cfg.MRCNN.CONV_INIT == 'MSRAFill':
             mynn.init.MSRAFill(self.upconv5.weight)
-        init.constant(self.upconv5.bias, 0)
+        init.constant_(self.upconv5.bias, 0)
 
     def share_res5_module(self, res5_target):
         """ Share res5 block with box head on training """
@@ -272,10 +272,10 @@ class mask_rcnn_fcn_head_v0up(nn.Module):
 
     def _init_weights(self):
         if cfg.MRCNN.CONV_INIT == 'GaussianFill':
-            init.normal(self.upconv5.weight, std=0.001)
+            init.normal_(self.upconv5.weight, std=0.001)
         elif cfg.MRCNN.CONV_INIT == 'MSRAFill':
             mynn.init.MSRAFill(self.upconv5.weight)
-        init.constant(self.upconv5.bias, 0)
+        init.constant_(self.upconv5.bias, 0)
 
     def detectron_weight_mapping(self):
         detectron_weight_mapping, orphan_in_detectron = \

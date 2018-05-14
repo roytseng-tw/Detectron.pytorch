@@ -10,6 +10,9 @@ import copy
 from ast import literal_eval
 
 import numpy as np
+from packaging import version
+import torch
+from torch.nn import init
 import yaml
 
 from utils.collections import AttrDict
@@ -956,6 +959,8 @@ __C.CUDA = False
 
 __C.DEBUG = False
 
+# [Infered value]
+__C.PYTORCH_VERSION_LESS_THAN_040 = False
 
 # ---------------------------------------------------------------------------- #
 # mask heads or keypoint heads that share res5 stage weights and
@@ -985,6 +990,12 @@ def assert_and_infer_cfg(make_immutable=True):
             "Path to the weight file must not be empty to load imagenet pertrained resnets."
     if set([__C.MRCNN.ROI_MASK_HEAD, __C.KRCNN.ROI_KEYPOINTS_HEAD]) & _SHARE_RES5_HEADS:
         __C.MODEL.SHARE_RES5 = True
+    if version.parse(torch.__version__) < version.parse('0.4.0'):
+        __C.PYTORCH_VERSION_LESS_THAN_040 = True
+        # create alias for PyTorch version less than 0.4.0
+        init.uniform_ = init.uniform
+        init.normal_ = init.normal
+        init.constant_ = init.constant
     if make_immutable:
         cfg.immutable(True)
 

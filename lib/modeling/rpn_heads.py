@@ -61,12 +61,12 @@ class single_scale_rpn_outputs(nn.Module):
         self._init_weights()
 
     def _init_weights(self):
-        init.normal(self.RPN_conv.weight, std=0.01)
-        init.constant(self.RPN_conv.bias, 0)
-        init.normal(self.RPN_cls_score.weight, std=0.01)
-        init.constant(self.RPN_cls_score.bias, 0)
-        init.normal(self.RPN_bbox_pred.weight, std=0.01)
-        init.constant(self.RPN_bbox_pred.bias, 0)
+        init.normal_(self.RPN_conv.weight, std=0.01)
+        init.constant_(self.RPN_conv.bias, 0)
+        init.normal_(self.RPN_cls_score.weight, std=0.01)
+        init.constant_(self.RPN_cls_score.bias, 0)
+        init.normal_(self.RPN_bbox_pred.weight, std=0.01)
+        init.constant_(self.RPN_bbox_pred.bias, 0)
 
     def detectron_weight_mapping(self):
         detectron_weight_mapping = {
