@@ -224,7 +224,8 @@ def add_stage(inplanes, planes, nblocks, stride=1, dilation=1):
     )
     inplanes = planes * block_func.expansion
     for i in range(1, nblocks):
-        layers.append(block_func(inplanes, planes, dilation=dilation))
+        layers.append(block_func(inplanes, planes, dilation=dilation,
+                                 group=cfg.RESNETS.NUM_GROUPS))
 
     return nn.Sequential(*layers), inplanes
 
