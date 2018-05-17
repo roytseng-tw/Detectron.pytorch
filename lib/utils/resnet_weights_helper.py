@@ -43,7 +43,7 @@ def load_pretrained_imagenet_weights(model):
     name_mapping, _ = model.detectron_weight_mapping
 
     for k, v in name_mapping.items():
-        if v is not None:
+        if isinstance(v, str):  # maybe a str, None or True
             if pattern.match(v):
                 if cfg.FPN.FPN_ON:
                     pretrianed_key = k.split('.', 2)[-1]
