@@ -12,9 +12,11 @@ from ast import literal_eval
 import numpy as np
 from packaging import version
 import torch
+import torch.nn as nn
 from torch.nn import init
 import yaml
 
+import nn as mynn
 from utils.collections import AttrDict
 
 __C = AttrDict()
@@ -996,6 +998,7 @@ def assert_and_infer_cfg(make_immutable=True):
         init.uniform_ = init.uniform
         init.normal_ = init.normal
         init.constant_ = init.constant
+        nn.GroupNorm = mynn.GroupNorm
     if make_immutable:
         cfg.immutable(True)
 
