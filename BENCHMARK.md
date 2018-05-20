@@ -5,6 +5,7 @@
 - Benchmark results using the weights from [Detectron model zoo]() are basically the same. Hence, I won't list them here.
 - All the testing results below are on COCO2017 val-set, using the models trained from scratch on COCO2017 train-set.
 - Evaluation scores are rounded to 3 decimal places and presented in the format of percentage.
+- Multiple evaluation on using pytorch may be listed. Each represents different training trial with same settings.
 
 ### COCO evaluation metrics
 
@@ -136,6 +137,21 @@
 <td align="right" bgcolor=white>64.9</td>
 </tr>
 <tr>
+<th bgcolor=white>PyTorch</th>
+<td align="right" bgcolor=white>37.6</td>
+<td align="right" bgcolor=white>59.1</td>
+<td align="right" bgcolor=white>40.9</td>
+<td align="right" bgcolor=white>21.6</td>
+<td align="right" bgcolor=white>40.7</td>
+<td align="right" bgcolor=white>49.0</td>
+<td align="right" bgcolor=white>31.2</td>
+<td align="right" bgcolor=white>49.0</td>
+<td align="right" bgcolor=white>51.4</td>
+<td align="right" bgcolor=white>32.3</td>
+<td align="right" bgcolor=white>55.0</td>
+<td align="right" bgcolor=white>64.7</td>
+</tr>
+<tr>
 <th bgcolor=white>Detectron</th>
 <td align="right" bgcolor=white>37.7</td>
 <td align="right" bgcolor=white>59.2</td>
@@ -183,6 +199,21 @@
 <td align="right" bgcolor=white>26.7</td>
 <td align="right" bgcolor=white>49.7</td>
 <td align="right" bgcolor=white>62.2</td>
+</tr>
+<tr>
+<th bgcolor=white>PyTorch</th>
+<td align="right" bgcolor=white>33.8</td>
+<td align="right" bgcolor=white>55.7</td>
+<td align="right" bgcolor=white>35.5</td>
+<td align="right" bgcolor=white>15.3</td>
+<td align="right" bgcolor=white>36.3</td>
+<td align="right" bgcolor=white>50.5</td>
+<td align="right" bgcolor=white>29.2</td>
+<td align="right" bgcolor=white>44.5</td>
+<td align="right" bgcolor=white>46.4</td>
+<td align="right" bgcolor=white>26.2</td>
+<td align="right" bgcolor=white>50.0</td>
+<td align="right" bgcolor=white>62.5</td>
 </tr>
 <tr>
 <th bgcolor=white>Detectron</th>
@@ -249,6 +280,21 @@
 <td align="right" bgcolor=white>75.9</td>
 </tr>
 <tr>
+<th bgcolor=white>PyTorch</th>
+<td align="right" bgcolor=white>53.5</td>
+<td align="right" bgcolor=white>82.8</td>
+<td align="right" bgcolor=white>58.4</td>
+<td align="right" bgcolor=white>36.7</td>
+<td align="right" bgcolor=white>61.2</td>
+<td align="right" bgcolor=white>69.5</td>
+<td align="right" bgcolor=white>18.6</td>
+<td align="right" bgcolor=white>54.2</td>
+<td align="right" bgcolor=white>62.2</td>
+<td align="right" bgcolor=white>47.8</td>
+<td align="right" bgcolor=white>68.3</td>
+<td align="right" bgcolor=white>76.7</td>
+</tr>
+<tr>
 <th bgcolor=white>Detectron</th>
 <td align="right" bgcolor=white>53.6</td>
 <td align="right" bgcolor=white>82.8</td>
@@ -292,6 +338,19 @@
 <td align="right" bgcolor=white>74.9</td>
 <td align="right" bgcolor=white>63.7</td>
 <td align="right" bgcolor=white>78.1</td>
+</tr>
+<tr>
+<th bgcolor=white>PyTorch</th>
+<td align="right" bgcolor=white>63.9</td>
+<td align="right" bgcolor=white>86.0</td>
+<td align="right" bgcolor=white>69.2</td>
+<td align="right" bgcolor=white>58.5</td>
+<td align="right" bgcolor=white>72.7</td>
+<td align="right" bgcolor=white>70.6</td>
+<td align="right" bgcolor=white>90.7</td>
+<td align="right" bgcolor=white>75.8</td>
+<td align="right" bgcolor=white>65.0</td>
+<td align="right" bgcolor=white>78.6</td>
 </tr>
 <tr>
 <th bgcolor=white>Detectron</th>

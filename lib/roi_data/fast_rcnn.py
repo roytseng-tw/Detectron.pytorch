@@ -212,6 +212,9 @@ def _compute_targets(ex_rois, gt_rois, labels):
 
     targets = box_utils.bbox_transform_inv(ex_rois, gt_rois,
                                            cfg.MODEL.BBOX_REG_WEIGHTS)
+    # Use class "1" for all fg boxes if using class_agnostic_bbox_reg
+    if cfg.MODEL.CLS_AGNOSTIC_BBOX_REG:
+        labels.clip(max=1, out=labels)
     return np.hstack((labels[:, np.newaxis], targets)).astype(
         np.float32, copy=False)
 
