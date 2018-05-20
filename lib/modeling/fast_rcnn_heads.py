@@ -13,8 +13,8 @@ class fast_rcnn_outputs(nn.Module):
     def __init__(self, dim_in):
         super().__init__()
         self.cls_score = nn.Linear(dim_in, cfg.MODEL.NUM_CLASSES)
-        if cfg.MODEL.CLS_AGNOSTIC_BBOX_REG:
-            self.bbox_pred = nn.Linear(dim_in, 4)
+        if cfg.MODEL.CLS_AGNOSTIC_BBOX_REG:  # bg and fg
+            self.bbox_pred = nn.Linear(dim_in, 4 * 2)
         else:
             self.bbox_pred = nn.Linear(dim_in, 4 * cfg.MODEL.NUM_CLASSES)
 
