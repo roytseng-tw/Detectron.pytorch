@@ -161,3 +161,22 @@ def load_ckpt(model, ckpt):
         if mapping[name]:
             state_dict[name] = ckpt[name]
     model.load_state_dict(state_dict, strict=False)
+
+
+def get_group_gn(dim):
+    """
+    get number of groups used by GroupNorm, based on number of channels
+    """
+    dim_per_gp = cfg.GROUP_NORM.DIM_PER_GP
+    num_groups = cfg.GROUP_NORM.NUM_GROUPS
+
+    assert dim_per_gp == -1 or num_groups == -1, \
+        "GroupNorm: can only specify G or C/G."
+
+    if dim_per_gp > 0:
+        assert dim % dim_per_gp == 0
+        group_gn = dim // dim_per_gp
+    else:
+        assert dim % num_groups == 0
+        group_gn = num_groups
+    return group_gn

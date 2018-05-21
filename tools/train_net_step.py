@@ -259,13 +259,16 @@ def main():
         maskRCNN.cuda()
 
     ### Optimizer ###
+    gn_params = []
     bias_params = []
     bias_param_names = []
     nonbias_params = []
     nonbias_param_names = []
     for key, value in dict(maskRCNN.named_parameters()).items():
         if value.requires_grad:
-            if 'bias' in key:
+            if 'gn' in key:
+                gn_params.append(value)
+            elif 'bias' in key:
                 bias_params.append(value)
                 bias_param_names.append(key)
             else:
@@ -278,7 +281,10 @@ def main():
          'weight_decay': cfg.SOLVER.WEIGHT_DECAY},
         {'params': bias_params,
          'lr': 0 * (cfg.SOLVER.BIAS_DOUBLE_LR + 1),
-         'weight_decay': cfg.SOLVER.WEIGHT_DECAY if cfg.SOLVER.BIAS_WEIGHT_DECAY else 0}
+         'weight_decay': cfg.SOLVER.WEIGHT_DECAY if cfg.SOLVER.BIAS_WEIGHT_DECAY else 0},
+        {'params': gn_params,
+         'lr': 0,
+         'weight_decay': cfg.SOLVER.WEIGHT_DECAY_GN}
     ]
     # names of paramerters for each paramter
     param_names = [nonbias_param_names, bias_param_names]

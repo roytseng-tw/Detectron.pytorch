@@ -93,6 +93,14 @@ class fpn(nn.Module):
         #
         # For the coarest backbone level: 1x1 conv only seeds recursion
         self.conv_top = nn.Conv2d(fpn_dim_lateral[0], fpn_dim, 1, 1, 0)
+        if cfg.FPN.USE_GN:
+            self.conv_top = nn.Sequential(
+                nn.Conv2d(fpn_dim_lateral[0], fpn_dim, 1, 1, 0, bias=False),
+                nn.GroupNorm(net_utils.get_group_gn(fpn_dim), fpn_dim,
+                             eps=cfg.GROUP_NORM.EPSILON)
+            )
+        else:
+            self.conv_top = nn.Conv2d(fpn_dim_lateral[0], fpn_dim, 1, 1, 0)
         self.topdown_lateral_modules = nn.ModuleList()
         self.posthoc_modules = nn.ModuleList()
 
@@ -104,9 +112,17 @@ class fpn(nn.Module):
 
         # Post-hoc scale-specific 3x3 convs
         for i in range(self.num_backbone_stages):
-            self.posthoc_modules.append(
-                nn.Conv2d(fpn_dim, fpn_dim, 3, 1, 1)
-            )
+            if cfg.FPN.USE_GN:
+                self.posthoc_modules.append(nn.Sequential(
+                    nn.Conv2d(fpn_dim, fpn_dim, 3, 1, 1, bias=False),
+                    nn.GroupNorm(net_utils.get_group_gn(fpn_dim), fpn_dim,
+                                 eps=cfg.GROUP_NORM.EPSILON)
+                ))
+            else:
+                self.posthoc_modules.append(
+                    nn.Conv2d(fpn_dim, fpn_dim, 3, 1, 1)
+                )
+
             self.spatial_scale.append(fpn_level_info.spatial_scales[i])
 
         #
@@ -144,7 +160,8 @@ class fpn(nn.Module):
         def init_func(m):
             if isinstance(m, nn.Conv2d):
                 mynn.init.XavierFill(m.weight)
-                init.constant_(m.bias, 0)
+                if m.bias is not None:
+                    init.constant_(m.bias, 0)
 
         for child_m in self.children():
             if (not isinstance(child_m, nn.ModuleList) or
@@ -159,23 +176,42 @@ class fpn(nn.Module):
             mapping_to_detectron['conv_body.'+key] = value
 
         d_prefix = 'fpn_inner_' + self.fpn_level_info.blobs[0]
-        mapping_to_detectron['conv_top.weight'] = d_prefix + '_w'
-        mapping_to_detectron['conv_top.bias'] = d_prefix + '_b'
+        if cfg.FPN.USE_GN:
+            mapping_to_detectron['conv_top.0.weight'] = d_prefix + '_w'
+            mapping_to_detectron['conv_top.1.weight'] = d_prefix + '_gn_s'
+            mapping_to_detectron['conv_top.1.bias'] = d_prefix + '_gn_b'
+        else:
+            mapping_to_detectron['conv_top.weight'] = d_prefix + '_w'
+            mapping_to_detectron['conv_top.bias'] = d_prefix + '_b'
         for i in range(self.num_backbone_stages - 1):
             p_prefix = 'topdown_lateral_modules.%d.conv_lateral' % i
             d_prefix = 'fpn_inner_' + self.fpn_level_info.blobs[i+1] + '_lateral'
-            mapping_to_detectron.update({
-                p_prefix + '.weight' : d_prefix + '_w',
-                p_prefix + '.bias': d_prefix + '_b'
-            })
+            if cfg.FPN.USE_GN:
+                mapping_to_detectron.update({
+                    p_prefix + '.0.weight' : d_prefix + '_w',
+                    p_prefix + '.1.weight' : d_prefix + '_gn_s',
+                    p_prefix + '.1.bias': d_prefix + '_gn_b'
+                })
+            else:
+                mapping_to_detectron.update({
+                    p_prefix + '.weight' : d_prefix + '_w',
+                    p_prefix + '.bias': d_prefix + '_b'
+                })
 
         for i in range(self.num_backbone_stages):
             p_prefix = 'posthoc_modules.%d' % i
             d_prefix = 'fpn_' + self.fpn_level_info.blobs[i]
-            mapping_to_detectron.update({
-                p_prefix + '.weight': d_prefix + '_w',
-                p_prefix + '.bias': d_prefix + '_b'
-            })
+            if cfg.FPN.USE_GN:
+                mapping_to_detectron.update({
+                    p_prefix + '.0.weight': d_prefix + '_w',
+                    p_prefix + '.1.weight': d_prefix + '_gn_s',
+                    p_prefix + '.1.bias': d_prefix + '_gn_b'
+                })
+            else:
+                mapping_to_detectron.update({
+                    p_prefix + '.weight': d_prefix + '_w',
+                    p_prefix + '.bias': d_prefix + '_b'
+                })
 
         if hasattr(self, 'extra_pyramid_modules'):
             for i in len(self.extra_pyramid_modules):
@@ -229,17 +265,29 @@ class topdown_lateral_module(nn.Module):
         self.dim_in_top = dim_in_top
         self.dim_in_lateral = dim_in_lateral
         self.dim_out = dim_in_top
-
-        self.conv_lateral = nn.Conv2d(dim_in_lateral, self.dim_out, 1, 1, 0)
+        if cfg.FPN.USE_GN:
+            self.conv_lateral = nn.Sequential(
+                nn.Conv2d(dim_in_lateral, self.dim_out, 1, 1, 0, bias=False),
+                nn.GroupNorm(net_utils.get_group_gn(self.dim_out), self.dim_out,
+                             eps=cfg.GROUP_NORM.EPSILON)
+            )
+        else:
+            self.conv_lateral = nn.Conv2d(dim_in_lateral, self.dim_out, 1, 1, 0)
 
         self._init_weights()
 
     def _init_weights(self):
-        if cfg.FPN.ZERO_INIT_LATERAL:
-            init.constant_(self.conv_lateral.weight, 0)
+        if cfg.FPN.USE_GN:
+            conv = self.conv_lateral[0]
         else:
-            mynn.init.XavierFill(self.conv_lateral.weight)
-        init.constant_(self.conv_lateral.bias, 0)
+            conv = self.conv_lateral
+
+        if cfg.FPN.ZERO_INIT_LATERAL:
+            init.constant_(conv.weight, 0)
+        else:
+            mynn.init.XavierFill(conv.weight)
+        if conv.bias is not None:
+            init.constant_(conv.bias, 0)
 
     def forward(self, top_blob, lateral_blob):
         # Lateral 1x1 conv
