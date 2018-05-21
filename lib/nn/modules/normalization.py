@@ -8,7 +8,7 @@ import nn.functional as myF
 
 class GroupNorm(nn.Module):
     def __init__(self, num_groups, num_channels, eps=1e-5, affine=True):
-        super(GroupNorm, self).__init__()
+        super().__init__()
         self.num_groups = num_groups
         self.num_channels = num_channels
         self.eps = eps
@@ -28,7 +28,7 @@ class GroupNorm(nn.Module):
 
     def forward(self, x):
         return myF.group_norm(
-            x, self.num_groups, self.weight, self.bias, self.eps)
+            x, self.num_groups, self.weight, self.bias, self.eps
         )
 
     def extra_repr(self):
