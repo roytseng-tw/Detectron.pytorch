@@ -43,6 +43,7 @@ This implementation has the following features:
 
 ## News
 
+- (2018/05/22) Add group normalization baselines.
 - (2018/05/15) PyTorch0.4 is supported now !
 
 ## Getting Started
@@ -149,9 +150,23 @@ python tools/download_imagenet_weights.py
 
 **If you want to use pytorch pre-trained models, please remember to transpose images from BGR to RGB, and also use the same data preprocessing (minus mean and normalize) as used in Pytorch pretrained model.**
 
+#### ImageNet Pretrained Model provided by Detectron
+
+- [R-50.pkl](https://s3-us-west-2.amazonaws.com/detectron/ImageNetPretrained/MSRA/R-50.pkl)
+- [R-101.pkl](https://s3-us-west-2.amazonaws.com/detectron/ImageNetPretrained/MSRA/R-101.pkl)
+- [R-50-GN.pkl](https://s3-us-west-2.amazonaws.com/detectron/ImageNetPretrained/47261647/R-50-GN.pkl)
+- [R-101-GN.pkl](https://s3-us-west-2.amazonaws.com/detectron/ImageNetPretrained/47261647/R-101-GN.pkl)
+
+Besides of using the pretrained weights for ResNet above, you can also use the weights from Detectron by changing the corresponding line in model config file as follows:
+```
+RESNETS:
+  IMAGENET_PRETRAINED_WEIGHTS: 'data/pretrained_model/R-50.pkl'
+```
+R-50-GN.pkl and R-101-GN.pkl are required for gn_baselines.
+
 ## Training
 
-**DO NOT CHANGE anything in the provided config files(configs/xxxx.yml) unless you know what you are doing**
+**DO NOT CHANGE anything in the provided config files(configs/\*\*/xxxx.yml) unless you know what you are doing**
 
 Use the environment variable `CUDA_VISIBLE_DEVICES` to control which GPUs to use.
 
@@ -171,7 +186,7 @@ Following config options will be adjusted **automatically** according to actual 
 ### Train from scratch
 Take mask-rcnn with res50 backbone for example.
 ```
-python tools/train_net_step.py --dataset coco2017 --cfg configs/e2e_mask_rcnn_R-50-C4.yml --use_tfboard --bs {batch_size} --nw {num_workers}
+python tools/train_net_step.py --dataset coco2017 --cfg configs/baselines/e2e_mask_rcnn_R-50-C4.yml --use_tfboard --bs {batch_size} --nw {num_workers}
 ```
 
 Use `--bs` to overwrite the default batch size to a proper value that fits into your GPUs. Simliar for `--nw`, number of data loader threads defaults to 4 in config.py.
@@ -184,7 +199,7 @@ Specify `—-use_tfboard` to log the losses on Tensorboard.
 As in Caffe, update network once (`optimizer.step()`) every `iter_size` iterations (forward + backward). This way to have a larger effective batch size for training. Notice that, step count is only increased after network update.
 
 ```
-python tools/train_net_step.py --dataset coco2017 --cfg configs/e2e_mask_rcnn_R-50-C4.yml --bs 4 --iter_size 4
+python tools/train_net_step.py --dataset coco2017 --cfg configs/baselines/e2e_mask_rcnn_R-50-C4.yml --bs 4 --iter_size 4
 ```
 `iter_size` defaults to 1.
 
@@ -246,7 +261,7 @@ In `train_net_step.py`:
 ### Evaluate the training results
 For example, test mask-rcnn on coco2017 val set
 ```
-python tools/test_net.py --dataset coco2017 --cfg config/e2e_mask_rcnn_R-50-FPN_1x.yaml --load_ckpt {path/to/your/checkpoint}
+python tools/test_net.py --dataset coco2017 --cfg config/baselines/e2e_mask_rcnn_R-50-FPN_1x.yaml --load_ckpt {path/to/your/checkpoint}
 ```
 Use `--load_detectron` to load Detectron's checkpoint. If multiple gpus are available, add `--multi-gpu-testing`.
 
@@ -254,7 +269,7 @@ Specify a different output directry, use `--output_dir {...}`. Defaults to `{the
 
 ### Visualize the training results on images
 ```
-python tools/infer_simple.py --dataset coco --cfg cfgs/e2e_mask_rcnn_R-50-C4.yml --load_ckpt {path/to/your/checkpoint} --image_dir {dir/of/input/images}  --output_dir {dir/to/save/visualizations}
+python tools/infer_simple.py --dataset coco --cfg cfgs/baselines/e2e_mask_rcnn_R-50-C4.yml --load_ckpt {path/to/your/checkpoint} --image_dir {dir/of/input/images}  --output_dir {dir/to/save/visualizations}
 ```
 `--output_dir` defaults to `infer_outputs`.
 
@@ -272,10 +287,10 @@ python tools/infer_simple.py --dataset coco --cfg cfgs/e2e_mask_rcnn_R-50-C4.yml
   ResNeXt is also implemented but not yet tested.
 
 - Box head:
-  `ResNet_roi_conv5_head`,`roi_2mlp_head`
+  `ResNet_roi_conv5_head`,`roi_2mlp_head`, `roi_Xconv1fc_head`, `roi_Xconv1fc_gn_head`
 
 - Mask head:
-  `mask_rcnn_fcn_head_v0upshare`,`mask_rcnn_fcn_head_v0up`, `mask_rcnn_fcn_head_v1up4convs`,`mask_rcnn_fcn_head_v1up`
+  `mask_rcnn_fcn_head_v0upshare`,`mask_rcnn_fcn_head_v0up`, `mask_rcnn_fcn_head_v1up`, `mask_rcnn_fcn_head_v1up4convs`, `mask_rcnn_fcn_head_v1up4convs_gn`
 
 - Keypoints head:
   `roi_pose_head_v1convX`
@@ -306,6 +321,7 @@ Architecture specific configuration files are put under [configs](configs/). The
 4. If want to load ImageNet pretrained weights for the model, add `RESNETS.IMAGENET_PRETRAINED_WEIGHTS` pointing to the pretrained weight file. If not, set `MODEL.LOAD_IMAGENET_PRETRAINED_WEIGHTS` to `False`.
 5. [Optional] Delete `OUTPUT_DIR: .` at the last line
 6. Do **NOT** change the option `NUM_GPUS` in the config file. It's used to infer the original batch size for training, and learning rate will be linearly scaled according to batch size change. Proper learning rate adjustment is important for training with different batch size.
+7. For group normalization baselines, add `RESNETS.USE_GN: True`.
 
 ## My nn.DataParallel
 
