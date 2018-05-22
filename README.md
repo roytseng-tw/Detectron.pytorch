@@ -151,15 +151,19 @@ python tools/download_imagenet_weights.py
 
 ## Training
 
+**DO NOT CHANGE anything in the provided config files(configs/xxxx.yml) unless you know what you are doing**
+
+Use the environment variable `CUDA_VISIBLE_DEVICES` to control which GPUs to use.
+
 ### Adapative config adjustment
 
-Following config options will be adjusted according to actual training setups: 1) number of GPUs `NUM_GPUS`, 2) batch size per GPU `TRAIN.IMS_PER_BATCH`, 3) update period `iter_size`
+#### Let's define some terms first
 
-##### Let's define some terms first
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; batch_size:            `NUM_GPUS` x `TRAIN.IMS_PER_BATCH`  
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; effective_batch_size:  batch_size x `iter_size`  
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; change of somethining: `new value of something / old value of something`
 
-batch_size:            `NUM_GPUS` x `TRAIN.IMS_PER_BATCH`  
-effective_batch_size:  batch_size x `iter_size`  
-change of somethining: `new value of something / old value of something`
+Following config options will be adjusted **automatically** according to actual training setups: 1) number of GPUs `NUM_GPUS`, 2) batch size per GPU `TRAIN.IMS_PER_BATCH`, 3) update period `iter_size`
 
 - `SOLVER.BASE_LR`: adjust directly propotional to the change of batch_size.
 - `SOLVER.STEPS`, `SOLVER.MAX_ITER`: adjust inversely propotional to the change of effective_batch_size.
