@@ -1,6 +1,7 @@
 ## PLEASE FOLLOW THESE INSTRUCTIONS BEFORE POSTING
-1. Please search existing *open and closed* issues in case your issue has already been reported
-2. Please try to debug the issue in case you can solve it on your own before posting
+1. **Read the README.md thoroughly ! README.md is not a decoration.**
+2. Please search existing *open and closed* issues in case your issue has already been reported
+3. Please try to debug the issue in case you can solve it on your own before posting
 
 ## After following steps above and agreeing to provide the detailed information requested below, you may continue with posting your issue
 (**Delete this line and the text above it.**)
