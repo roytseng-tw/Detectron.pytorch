@@ -381,5 +381,5 @@ def ResNet_roi_conv5_head_for_masks(dim_in):
     """ResNet "conv5" / "stage5" head for predicting masks."""
     dilation = cfg.MRCNN.DILATION
     stride_init = cfg.MRCNN.ROI_XFORM_RESOLUTION // 7  # by default: 2
-    module, dim_out = ResNet.add_stage(dim_in, 512, 3, stride_init, dilation)
+    module, dim_out = ResNet.add_stage(dim_in, 2048, 512, 3, dilation, stride_init)
     return module, dim_out

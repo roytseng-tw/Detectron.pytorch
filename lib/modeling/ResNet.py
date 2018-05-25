@@ -49,16 +49,16 @@ class ResNet_convX_body(nn.Module):
         self.res1 = globals()[cfg.RESNETS.STEM_FUNC]()
         dim_in = 64
         dim_bottleneck = cfg.RESNETS.NUM_GROUPS * cfg.RESNETS.WIDTH_PER_GROUP
-        self.res2, dim_in = add_stage(dim_in, dim_bottleneck, block_counts[0])
-        self.res3, dim_in = add_stage(dim_in, dim_bottleneck * 2, block_counts[1], stride=2)
-        self.res4, dim_in = add_stage(dim_in, dim_bottleneck * 4, block_counts[2], stride=2)
+        self.res2, dim_in = add_stage(dim_in, 256, dim_bottleneck, block_counts[0],
+                                      dilation=1, stride_init=1)
+        self.res3, dim_in = add_stage(dim_in, 512, dim_bottleneck * 2, block_counts[1],
+                                      dilation=1, stride_init=2)
+        self.res4, dim_in = add_stage(dim_in, 1024, dim_bottleneck * 4, block_counts[2],
+                                      dilation=1, stride_init=2)
         if len(block_counts) == 4:
-            if cfg.RESNETS.RES5_DILATION != 1:
-                stride = 1
-            else:
-                stride = 2
-            self.res5, dim_in = add_stage(dim_in, dim_bottleneck * 8, block_counts[3],
-                                          stride, cfg.RESNETS.RES5_DILATION)
+            stride_init = 2 if cfg.RESNETS.RES5_DILATION == 1 else 1
+            self.res5, dim_in = add_stage(dim_in, 2048, dim_bottleneck * 8, block_counts[3],
+                                          cfg.RESNETS.RES5_DILATION, stride_init)
             self.spatial_scale = 1 / 32 * cfg.RESNETS.RES5_DILATION
         else:
             self.spatial_scale = 1 / 16  # final feature scale wrt. original image scale
@@ -123,8 +123,8 @@ class ResNet_roi_conv5_head(nn.Module):
 
         dim_bottleneck = cfg.RESNETS.NUM_GROUPS * cfg.RESNETS.WIDTH_PER_GROUP
         stride_init = cfg.FAST_RCNN.ROI_XFORM_RESOLUTION // 7
-        self.res5, self.dim_out = add_stage(dim_in, dim_bottleneck * 8, 3, stride_init)
-        assert self.dim_out == 2048
+        self.res5, self.dim_out = add_stage(dim_in, 2048, dim_bottleneck * 8, 3,
+                                            dilation=1, stride_init=stride_init)
         self.avgpool = nn.AvgPool2d(7)
 
         self._init_modules()
@@ -155,30 +155,39 @@ class ResNet_roi_conv5_head(nn.Module):
             return x
 
 
-def add_stage(inplanes, planes, nblocks, stride=1, dilation=1):
+def add_stage(inplanes, outplanes, innerplanes, nblocks, dilation=1, stride_init=2):
     """Make a stage consist of `nblocks` residual blocks.
     Returns:
         - stage module: an nn.Sequentail module of residual blocks
         - final output dimension
     """
-    block_func = globals()[cfg.RESNETS.TRANS_FUNC]
-    downsample = None
-    if stride != 1 or inplanes != planes * block_func.expansion:
-        downsample = globals()[cfg.RESNETS.SHORTCUT_FUNC](
-            inplanes, planes * block_func.expansion, stride)
+    res_blocks = []
+    stride = stride_init
+    for _ in range(nblocks):
+        res_blocks.append(add_residual_block(
+            inplanes, outplanes, innerplanes, dilation, stride
+        ))
+        inplanes = outplanes
+        stride = 1
 
-    layers = []
-    layers.append(
-        block_func(inplanes, planes, stride, dilation=dilation,
-                   group=cfg.RESNETS.NUM_GROUPS,
-                   downsample=downsample)
-    )
-    inplanes = planes * block_func.expansion
-    for i in range(1, nblocks):
-        layers.append(block_func(inplanes, planes, dilation=dilation,
-                                 group=cfg.RESNETS.NUM_GROUPS))
+    return nn.Sequential(*res_blocks), outplanes
 
-    return nn.Sequential(*layers), inplanes
+
+def add_residual_block(inplanes, outplanes, innerplanes, dilation, stride):
+    """Return a residual block module, including residual connection, """
+    if stride != 1 or inplanes != outplanes:
+        shortcut_func = globals()[cfg.RESNETS.SHORTCUT_FUNC]
+        downsample = shortcut_func(inplanes, outplanes, stride)
+    else:
+        downsample = None
+
+    trans_func = globals()[cfg.RESNETS.TRANS_FUNC]
+    res_block = trans_func(
+        inplanes, outplanes, innerplanes, stride,
+        dilation=dilation, group=cfg.RESNETS.NUM_GROUPS,
+        downsample=downsample)
+
+    return res_block
 
 
 # ------------------------------------------------------------------------------
@@ -236,34 +245,30 @@ def basic_gn_stem():
 
 class bottleneck_transformation(nn.Module):
     """ Bottleneck Residual Block """
-    expansion = 4
 
-    def __init__(self, inplanes, planes, stride=1, dilation=1, group=1,
+    def __init__(self, inplanes, outplanes, innerplanes, stride=1, dilation=1, group=1,
                  downsample=None):
         super().__init__()
         # In original resnet, stride=2 is on 1x1.
         # In fb.torch resnet, stride=2 is on 3x3.
         (str1x1, str3x3) = (stride, 1) if cfg.RESNETS.STRIDE_1X1 else (1, stride)
+        self.stride = stride
 
         self.conv1 = nn.Conv2d(
-            inplanes, planes, kernel_size=1, stride=str1x1, bias=False)
-        self.bn1 = mynn.AffineChannel2d(planes)
+            inplanes, innerplanes, kernel_size=1, stride=str1x1, bias=False)
+        self.bn1 = mynn.AffineChannel2d(innerplanes)
+
         self.conv2 = nn.Conv2d(
-            planes,
-            planes,
-            kernel_size=3,
-            stride=str3x3,
-            padding=1 * dilation,
-            dilation=dilation,
-            groups=group,
-            bias=False)
-        self.bn2 = mynn.AffineChannel2d(planes)
+            innerplanes, innerplanes, kernel_size=3, stride=str3x3, bias=False,
+            padding=1 * dilation, dilation=dilation, groups=group)
+        self.bn2 = mynn.AffineChannel2d(innerplanes)
+
         self.conv3 = nn.Conv2d(
-            planes, planes * 4, kernel_size=1, stride=1, bias=False)
-        self.bn3 = mynn.AffineChannel2d(planes * 4)
-        self.relu = nn.ReLU(inplace=True)
+            innerplanes, outplanes, kernel_size=1, stride=1, bias=False)
+        self.bn3 = mynn.AffineChannel2d(outplanes)
+
         self.downsample = downsample
-        self.stride = stride
+        self.relu = nn.ReLU(inplace=True)
 
     def forward(self, x):
         residual = x
@@ -291,37 +296,32 @@ class bottleneck_transformation(nn.Module):
 class bottleneck_gn_transformation(nn.Module):
     expansion = 4
 
-    def __init__(self, inplanes, planes, stride=1, dilation=1, group=1,
+    def __init__(self, inplanes, outplanes, innerplanes, stride=1, dilation=1, group=1,
                  downsample=None):
         super().__init__()
         # In original resnet, stride=2 is on 1x1.
         # In fb.torch resnet, stride=2 is on 3x3.
         (str1x1, str3x3) = (stride, 1) if cfg.RESNETS.STRIDE_1X1 else (1, stride)
-        
-        self.conv1 = nn.Conv2d(
-            inplanes, planes, kernel_size=1, stride=str1x1, bias=False)
-        self.gn1 = nn.GroupNorm(net_utils.get_group_gn(planes), planes,
-                                eps=cfg.GROUP_NORM.EPSILON)
-        self.conv2 = nn.Conv2d(
-            planes,
-            planes,
-            kernel_size=3,
-            stride=str3x3,
-            padding=1 * dilation,
-            dilation=dilation,
-            groups=group,
-            bias=False)
-        self.gn2 = nn.GroupNorm(net_utils.get_group_gn(planes), planes,
-                                eps=cfg.GROUP_NORM.EPSILON)
-        outplanes = planes * self.expansion
-        self.conv3 = nn.Conv2d(
-            planes, outplanes, kernel_size=1, stride=1, bias=False)
+        self.stride = stride
 
+        self.conv1 = nn.Conv2d(
+            inplanes, innerplanes, kernel_size=1, stride=str1x1, bias=False)
+        self.gn1 = nn.GroupNorm(net_utils.get_group_gn(innerplanes), innerplanes,
+                                eps=cfg.GROUP_NORM.EPSILON)
+
+        self.conv2 = nn.Conv2d(
+            innerplanes, innerplanes, kernel_size=3, stride=str3x3, bias=False,
+            padding=1 * dilation, dilation=dilation, groups=group)
+        self.gn2 = nn.GroupNorm(net_utils.get_group_gn(innerplanes), innerplanes,
+                                eps=cfg.GROUP_NORM.EPSILON)
+
+        self.conv3 = nn.Conv2d(
+            innerplanes, outplanes, kernel_size=1, stride=1, bias=False)
         self.gn3 = nn.GroupNorm(net_utils.get_group_gn(outplanes), outplanes,
                                 eps=cfg.GROUP_NORM.EPSILON)
-        self.relu = nn.ReLU(inplace=True)
+
         self.downsample = downsample
-        self.stride = stride
+        self.relu = nn.ReLU(inplace=True)
 
     def forward(self, x):
         residual = x
