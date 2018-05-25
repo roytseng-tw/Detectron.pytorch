@@ -43,6 +43,7 @@ This implementation has the following features:
 
 ## News
 
+- (2018/05/25) Support ResNeXt backbones.
 - (2018/05/22) Add group normalization baselines.
 - (2018/05/15) PyTorch0.4 is supported now !
 
@@ -156,13 +157,19 @@ python tools/download_imagenet_weights.py
 - [R-101.pkl](https://s3-us-west-2.amazonaws.com/detectron/ImageNetPretrained/MSRA/R-101.pkl)
 - [R-50-GN.pkl](https://s3-us-west-2.amazonaws.com/detectron/ImageNetPretrained/47261647/R-50-GN.pkl)
 - [R-101-GN.pkl](https://s3-us-west-2.amazonaws.com/detectron/ImageNetPretrained/47592356/R-101-GN.pkl)
+- [X-101-32x8d.pkl](https://s3-us-west-2.amazonaws.com/detectron/ImageNetPretrained/20171220/X-101-32x8d.pkl)
+- [X-101-64x4d.pkl](https://s3-us-west-2.amazonaws.com/detectron/ImageNetPretrained/FBResNeXt/X-101-64x4d.pkl)
+- [X-152-32x8d-IN5k.pkl](https://s3-us-west-2.amazonaws.com/detectron/ImageNetPretrained/25093814/X-152-32x8d-IN5k.pkl)
 
 Besides of using the pretrained weights for ResNet above, you can also use the weights from Detectron by changing the corresponding line in model config file as follows:
 ```
 RESNETS:
   IMAGENET_PRETRAINED_WEIGHTS: 'data/pretrained_model/R-50.pkl'
 ```
+
 R-50-GN.pkl and R-101-GN.pkl are required for gn_baselines.
+
+X-101-32x8d.pkl, X-101-64x4d.pkl and X-152-32x8d-IN5k.pkl are required for ResNeXt backbones.
 
 ## Training
 
@@ -280,11 +287,11 @@ python tools/infer_simple.py --dataset coco --cfg cfgs/baselines/e2e_mask_rcnn_R
     `ResNet50_conv4_body`,`ResNet50_conv5_body`,
     `ResNet101_Conv4_Body`,`ResNet101_Conv5_Body`,
     `ResNet152_Conv5_Body`
+  - ResNeXt:
+    `[fpn_]ResNet101_Conv4_Body`,`[fpn_]ResNet101_Conv5_Body`, `[fpn_]ResNet152_Conv5_Body`
   - FPN:
     `fpn_ResNet50_conv5_body`,`fpn_ResNet50_conv5_P2only_body`,
     `fpn_ResNet101_conv5_body`,`fpn_ResNet101_conv5_P2only_body`,`fpn_ResNet152_conv5_body`,`fpn_ResNet152_conv5_P2only_body`
-
-  ResNeXt is also implemented but not yet tested.
 
 - Box head:
   `ResNet_roi_conv5_head`,`roi_2mlp_head`, `roi_Xconv1fc_head`, `roi_Xconv1fc_gn_head`
