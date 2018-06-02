@@ -43,6 +43,15 @@ def get_func(func_name):
         raise
 
 
+def compare_state_dict(sa, sb):
+    if sa.keys() != sb.keys():
+        return False
+    for k, va in sa.items():
+        if not torch.equal(va, sb[k]):
+            return False
+    return True
+
+
 def check_inference(net_func):
     @wraps(net_func)
     def wrapper(self, *args, **kwargs):
@@ -119,9 +128,9 @@ class Generalized_RCNN(nn.Module):
             resnet_utils.load_pretrained_imagenet_weights(self)
             # Check if shared weights are equaled
             if cfg.MODEL.MASK_ON and getattr(self.Mask_Head, 'SHARE_RES5', False):
-                assert self.Mask_Head.res5.state_dict() == self.Box_Head.res5.state_dict()
+                assert compare_state_dict(self.Mask_Head.res5.state_dict(), self.Box_Head.res5.state_dict())
             if cfg.MODEL.KEYPOINTS_ON and getattr(self.Keypoint_Head, 'SHARE_RES5', False):
-                assert self.Keypoint_Head.res5.state_dict() == self.Box_Head.res5.state_dict()
+                assert compare_state_dict(self.Keypoint_Head.res5.state_dict(), self.Box_Head.res5.state_dict())
 
         if cfg.TRAIN.FREEZE_CONV_BODY:
             for p in self.Conv_Body.parameters():

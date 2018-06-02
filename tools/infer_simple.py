@@ -109,7 +109,7 @@ def main():
 
     assert bool(args.load_ckpt) ^ bool(args.load_detectron), \
         'Exactly one of --load_ckpt and --load_detectron should be specified.'
-    cfg.RESNETS.IMAGENET_PRETRAINED = False  # Don't need to load imagenet pretrained weights
+    cfg.MODEL.LOAD_IMAGENET_PRETRAINED_WEIGHTS = False  # Don't need to load imagenet pretrained weights
     assert_and_infer_cfg()
 
     maskRCNN = Generalized_RCNN()
