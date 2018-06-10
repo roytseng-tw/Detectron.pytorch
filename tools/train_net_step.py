@@ -259,21 +259,33 @@ def main():
         maskRCNN.cuda()
 
     ### Optimizer ###
+    gn_param_nameset = set()
+    for name, module in maskRCNN.named_modules():
+        if isinstance(module, nn.GroupNorm):
+            gn_param_nameset.add(name+'.weight')
+            gn_param_nameset.add(name+'.bias')
     gn_params = []
+    gn_param_names = []
     bias_params = []
     bias_param_names = []
     nonbias_params = []
     nonbias_param_names = []
+    nograd_param_names = []
     for key, value in dict(maskRCNN.named_parameters()).items():
         if value.requires_grad:
-            if 'gn' in key:
-                gn_params.append(value)
-            elif 'bias' in key:
+            if 'bias' in key:
                 bias_params.append(value)
                 bias_param_names.append(key)
+            elif key in gn_param_nameset:
+                gn_params.append(value)
+                gn_param_names.append(key)
             else:
                 nonbias_params.append(value)
                 nonbias_param_names.append(key)
+        else:
+            nograd_param_names.append(key)
+    assert (gn_param_nameset - set(nograd_param_names) - set(bias_param_names)) == set(gn_param_names)
+
     # Learning rate of 0 is a dummy value to be set properly at the start of training
     params = [
         {'params': nonbias_params,
@@ -287,7 +299,7 @@ def main():
          'weight_decay': cfg.SOLVER.WEIGHT_DECAY_GN}
     ]
     # names of paramerters for each paramter
-    param_names = [nonbias_param_names, bias_param_names]
+    param_names = [nonbias_param_names, bias_param_names, gn_param_names]
 
     if cfg.SOLVER.TYPE == "SGD":
         optimizer = torch.optim.SGD(params, momentum=cfg.SOLVER.MOMENTUM)
