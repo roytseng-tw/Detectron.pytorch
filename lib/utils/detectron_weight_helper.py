@@ -22,7 +22,7 @@ def load_detectron_weight(net, detectron_weight_file):
 
 
 def resnet_weights_name_pattern():
-    pattern = re.compile(r"conv1_w|conv1_gn_[sb]|res_conv1_.+|res\d_\d_.+")
+    pattern = re.compile(r"conv1_w|conv1_gn_[sb]|res_conv1_.+|res\d+_\d+_.+")
     return pattern
 
 
