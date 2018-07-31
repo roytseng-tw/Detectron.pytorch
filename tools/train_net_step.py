@@ -271,7 +271,7 @@ def main():
     nonbias_params = []
     nonbias_param_names = []
     nograd_param_names = []
-    for key, value in dict(maskRCNN.named_parameters()).items():
+    for key, value in maskRCNN.named_parameters():
         if value.requires_grad:
             if 'bias' in key:
                 bias_params.append(value)
@@ -324,8 +324,8 @@ def main():
 
             # There is a bug in optimizer.load_state_dict on Pytorch 0.3.1.
             # However it's fixed on master.
-            # optimizer.load_state_dict(checkpoint['optimizer'])
-            misc_utils.load_optimizer_state_dict(optimizer, checkpoint['optimizer'])
+            optimizer.load_state_dict(checkpoint['optimizer'])
+            # misc_utils.load_optimizer_state_dict(optimizer, checkpoint['optimizer'])
         del checkpoint
         torch.cuda.empty_cache()
 
