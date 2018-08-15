@@ -19,10 +19,10 @@ int BilinearSamplerBHWD_updateOutput_cuda(THCudaTensor *inputImages, THCudaTenso
 //  THCudaTensor *output = (THCudaTensor *)luaT_checkudata(L, 4, "torch.CudaTensor");
 
   int success = 0;
-  success = BilinearSamplerBHWD_updateOutput_cuda_kernel(output->size[1],
-                                               output->size[3],
-                                               output->size[2],
-                                               output->size[0],
+  success = BilinearSamplerBHWD_updateOutput_cuda_kernel(THCudaTensor_size(state, output, 1),
+                                               THCudaTensor_size(state, output, 3),
+                                               THCudaTensor_size(state, output, 2),
+                                               THCudaTensor_size(state, output, 0),
                                                THCudaTensor_size(state, inputImages, 1),
                                                THCudaTensor_size(state, inputImages, 2),
                                                THCudaTensor_size(state, inputImages, 3),
@@ -62,10 +62,10 @@ int BilinearSamplerBHWD_updateGradInput_cuda(THCudaTensor *inputImages, THCudaTe
 //  THCudaTensor *gradOutput = (THCudaTensor *)luaT_checkudata(L, 6, "torch.CudaTensor");
 
   int success = 0;
-  success = BilinearSamplerBHWD_updateGradInput_cuda_kernel(gradOutput->size[1],
-                                                  gradOutput->size[3],
-                                                  gradOutput->size[2],
-                                                  gradOutput->size[0],
+  success = BilinearSamplerBHWD_updateGradInput_cuda_kernel(THCudaTensor_size(state, gradOutput, 1),
+                                                  THCudaTensor_size(state, gradOutput, 3),
+                                                  THCudaTensor_size(state, gradOutput, 2),
+                                                  THCudaTensor_size(state, gradOutput, 0),
                                                   THCudaTensor_size(state, inputImages, 1),
                                                   THCudaTensor_size(state, inputImages, 2),
                                                   THCudaTensor_size(state, inputImages, 3),
